@@ -1,0 +1,175 @@
+{% extends '@WebProfiler/Profiler/layout.html.twig' %}
+
+{% block head %}
+    {{ parent() }}
+
+    <style>
+        .sf-profiler-viewmodel-requests thead th {
+            vertical-align: top;
+        }
+        .sf-profiler-viewmodel-requests .viewmodel-class {
+            border: 1px solid var(--header-status-request-method-color);
+            border-radius: 5px;
+            color: var(--header-status-request-method-color);
+            display: inline-block;
+            font-weight: 500;
+            line-height: 1;
+            margin-right: 6px;
+            padding: 2px 4px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .sf-profiler-viewmodel-requests .status-response-status-code {
+            background: var(--gray-600);
+            border-radius: 4px;
+            color: var(--white);
+            display: inline-block;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 2px;
+            padding: 1px 3px;
+        }
+        .sf-profiler-viewmodel-requests .status-response-status-code.status-success { background: var(--header-success-status-code-background); color: var(--header-success-status-code-color); }
+        .sf-profiler-viewmodel-requests .status-response-status-code.status-error { background: var(--header-error-status-code-background); color: var(--header-error-status-code-color); }
+        .sf-profiler-viewmodel-requests .status-response-status-code.status-cached { background: #0288d1; color: var(--white); }
+        .sf-profiler-viewmodel-requests .status-response-status-code.status-stale { background: #f9a825; color: var(--black); }
+        .sf-profiler-viewmodel-requests .status-response-status-code.status-stale-error { background: #ef6c00; color: var(--white); }
+    </style>
+{% endblock %}
+
+{% block toolbar %}
+    {% if collector.count > 0 %}
+        {% set icon %}
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="9" y1="3" x2="9" y2="21"/>
+                <line x1="15" y1="3" x2="15" y2="21"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="3" y1="15" x2="21" y2="15"/>
+            </svg>
+            <span class="sf-toolbar-value">{{ collector.count }}</span>
+        {% endset %}
+
+        {% set text %}
+            <div class="sf-toolbar-info-piece">
+                <b>ViewModels</b>
+                <span class="sf-toolbar-status">{{ collector.count }}</span>
+            </div>
+            <div class="sf-toolbar-info-piece">
+                <b>Total time</b>
+                <span>{{ collector.totalTime|number_format(2) }} ms</span>
+            </div>
+            <div class="sf-toolbar-info-piece">
+                <b>Parallel efficiency</b>
+                <span>{{ (collector.parallelEfficiency * 100)|number_format(0) }}%</span>
+            </div>
+        {% endset %}
+
+        {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', { link: profiler_url }) }}
+    {% endif %}
+{% endblock %}
+
+{% block menu %}
+    <span class="label {{ collector.count == 0 ? 'disabled' }}">
+        <span class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="9" y1="3" x2="9" y2="21"/>
+                <line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+        </span>
+        <strong>ViewModels</strong>
+        {% if collector.count > 0 %}
+            <span class="count">
+                {{ collector.count }}
+            </span>
+        {% endif %}
+    </span>
+{% endblock %}
+
+{% block panel %}
+    <h2>ViewModel Resolution</h2>
+
+    {% if collector.count == 0 %}
+        <div class="empty empty-panel">
+            <p>No ViewModels were resolved during this request.</p>
+        </div>
+    {% else %}
+        <div class="metrics">
+            <div class="metric">
+                <span class="value">{{ collector.count }}</span>
+                <span class="label">ViewModels</span>
+            </div>
+            <div class="metric">
+                <span class="value">{{ collector.totalTime|number_format(2) }} ms</span>
+                <span class="label">Total time</span>
+            </div>
+            <div class="metric">
+                <span class="value">{{ (collector.parallelEfficiency * 100)|number_format(0) }}%</span>
+                <span class="label">Parallel efficiency</span>
+            </div>
+        </div>
+
+        <h2>Resolved ViewModels</h2>
+
+        {% for entry in collector.entries %}
+            <table class="sf-profiler-viewmodel-requests">
+                <thead>
+                    <tr>
+                        <th>
+                            <span class="viewmodel-class">ViewModel</span>
+                        </th>
+                        <th class="full-width">
+                            {{ entry.class }}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th class="font-normal">Status</th>
+                        <td>
+                            {% if entry.status == 'error' %}
+                                <span class="font-normal status-response-status-code status-error">Error</span>
+                                {% if entry.error %}
+                                    <p class="text-muted">{{ entry.error }}</p>
+                                {% endif %}
+                            {% elseif entry.status == 'cached' %}
+                                <span class="font-normal status-response-status-code status-cached">Cached</span>
+                                <p class="text-muted">Served from fresh cache (no resolution)</p>
+                            {% elseif entry.status == 'stale' %}
+                                <span class="font-normal status-response-status-code status-stale">Stale</span>
+                                <p class="text-muted">Served stale while revalidating in background</p>
+                            {% elseif entry.status == 'stale_error' %}
+                                <span class="font-normal status-response-status-code status-stale-error">Stale (Error)</span>
+                                <p class="text-muted">Served stale due to revalidation failure</p>
+                            {% else %}
+                                <span class="font-normal status-response-status-code status-success">OK</span>
+
+                                <table class="font-normal" style="margin-top: 10px;">
+                                    <tr>
+                                        <th>Duration</th>
+                                        <td>{{ entry.duration|number_format(2) }} ms</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Start time</th>
+                                        <td>{{ entry.start|number_format(2) }} ms</td>
+                                    </tr>
+                                </table>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if entry.dependencies is not empty %}
+                        <tr>
+                            <th class="font-normal">Dependencies</th>
+                            <td>
+                                {% for dep in entry.dependencies %}
+                                    <span class="label">{{ dep|split('\\\\')|last }}</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        {% endfor %}
+    {% endif %}
+{% endblock %}

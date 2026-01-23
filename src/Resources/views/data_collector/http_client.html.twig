@@ -1,0 +1,187 @@
+{% extends '@WebProfiler/Profiler/layout.html.twig' %}
+
+{% block head %}
+    {{ parent() }}
+
+    <style>
+        .sf-profiler-httpclient-requests thead th {
+            vertical-align: top;
+        }
+        .sf-profiler-httpclient-requests .http-method {
+            border: 1px solid var(--header-status-request-method-color);
+            border-radius: 5px;
+            color: var(--header-status-request-method-color);
+            display: inline-block;
+            font-weight: 500;
+            line-height: 1;
+            margin-right: 6px;
+            padding: 2px 4px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .sf-profiler-httpclient-requests .status-response-status-code {
+            background: var(--gray-600);
+            border-radius: 4px;
+            color: var(--white);
+            display: inline-block;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 2px;
+            padding: 1px 3px;
+        }
+        .sf-profiler-httpclient-requests .status-response-status-code.status-success { background: var(--header-success-status-code-background); color: var(--header-success-status-code-color); }
+        .sf-profiler-httpclient-requests .status-response-status-code.status-warning { background: var(--header-warning-status-code-background); color: var(--header-warning-status-code-color); }
+        .sf-profiler-httpclient-requests .status-response-status-code.status-error { background: var(--header-error-status-code-background); color: var(--header-error-status-code-color); }
+    </style>
+{% endblock %}
+
+{% block toolbar %}
+    {% if collector.count > 0 %}
+        {% set status_color = collector.errorCount > 0 ? 'red' : '' %}
+
+        {% set icon %}
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <span class="sf-toolbar-value">{{ collector.count }}</span>
+        {% endset %}
+
+        {% set text %}
+            <div class="sf-toolbar-info-piece">
+                <b>Total requests</b>
+                <span>{{ collector.count }}</span>
+            </div>
+            <div class="sf-toolbar-info-piece">
+                <b>HTTP errors</b>
+                <span class="sf-toolbar-status {{ collector.errorCount > 0 ? 'sf-toolbar-status-red' }}">{{ collector.errorCount }}</span>
+            </div>
+        {% endset %}
+
+        {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', { link: profiler_url, status: status_color }) }}
+    {% endif %}
+{% endblock %}
+
+{% block menu %}
+    <span class="label {{ collector.count == 0 ? 'disabled' }}">
+        <span class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+        </span>
+        <strong>HTTP (AmPHP)</strong>
+        {% if collector.count > 0 %}
+            <span class="count">
+                {{ collector.count }}
+            </span>
+        {% endif %}
+    </span>
+{% endblock %}
+
+{% block panel %}
+    <h2>HTTP Client (AmPHP)</h2>
+
+    {% if collector.count == 0 %}
+        <div class="empty empty-panel">
+            <p>No HTTP requests were made.</p>
+        </div>
+    {% else %}
+        <div class="metrics">
+            <div class="metric">
+                <span class="value">{{ collector.count }}</span>
+                <span class="label">Total requests</span>
+            </div>
+            <div class="metric">
+                <span class="value">{{ collector.errorCount }}</span>
+                <span class="label">HTTP errors</span>
+            </div>
+        </div>
+
+        <h2>Requests</h2>
+
+        {% for entry in collector.entries %}
+            <table class="sf-profiler-httpclient-requests">
+                <thead>
+                    <tr>
+                        <th>
+                            <span class="http-method">{{ entry.method }}</span>
+                        </th>
+                        <th class="full-width">
+                            {{ entry.url }}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th class="font-normal">Response</th>
+                        <td>
+                            {% if entry.status == 'error' and entry.statusCode == 0 %}
+                                <span class="font-normal status-response-status-code status-error">Error</span>
+                                {% if entry.error %}
+                                    <p class="text-muted">{{ entry.error }}</p>
+                                {% endif %}
+                            {% else %}
+                                {% if entry.statusCode >= 500 %}
+                                    {% set responseStatus = 'error' %}
+                                {% elseif entry.statusCode >= 400 %}
+                                    {% set responseStatus = 'warning' %}
+                                {% else %}
+                                    {% set responseStatus = 'success' %}
+                                {% endif %}
+                                <span class="font-normal status-response-status-code status-{{ responseStatus }}">
+                                    {{ entry.statusCode }}
+                                </span>
+
+                                <table class="font-normal" style="margin-top: 10px;">
+                                    <tr>
+                                        <th>Duration</th>
+                                        <td>{{ entry.duration|number_format(2) }} ms</td>
+                                    </tr>
+                                    {% if entry.responseSize > 0 %}
+                                        <tr>
+                                            <th>Response size</th>
+                                            <td>{{ (entry.responseSize / 1024)|number_format(2) }} KB</td>
+                                        </tr>
+                                    {% endif %}
+                                </table>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if entry.requestHeaders is not empty %}
+                        <tr>
+                            <th class="font-normal">Request headers</th>
+                            <td>
+                                <table class="font-normal">
+                                    {% for name, value in entry.requestHeaders %}
+                                        <tr>
+                                            <th>{{ name }}</th>
+                                            <td>{{ value is iterable ? value|join(', ') : value }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            </td>
+                        </tr>
+                    {% endif %}
+                    {% if entry.responseHeaders is not empty %}
+                        <tr>
+                            <th class="font-normal">Response headers</th>
+                            <td>
+                                <table class="font-normal">
+                                    {% for name, value in entry.responseHeaders %}
+                                        <tr>
+                                            <th>{{ name }}</th>
+                                            <td>{{ value is iterable ? value|join(', ') : value }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        {% endfor %}
+    {% endif %}
+{% endblock %}
