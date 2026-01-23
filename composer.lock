@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b1f37c13793d2c8838c3009bd9f58c26",
+    "content-hash": "43d14554d4ba7b710c53beeb0aade69e",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3908,20 +3908,20 @@
             "dist": {
                 "type": "path",
                 "url": "../twig-streaming",
-                "reference": "93a17ae5f723fb56adaaa1d02bf83caf88045752"
+                "reference": "f1fa2674ed5aaf6db35e057fa188145c73c1772c"
             },
             "require": {
                 "amphp/amp": "^3.0",
                 "php": ">=8.4",
-                "symfony/http-foundation": "^8.0",
+                "symfony/http-foundation": "^6.4 || ^7.0 || ^8.0",
                 "symfony/service-contracts": "^1.0 || ^2.0 || ^3.0",
                 "toppy/async-view-model": "*@dev",
                 "twig/twig": "^3.0"
             },
             "require-dev": {
                 "phpunit/phpunit": "^12.5",
-                "symfony/asset": "^8.0",
-                "symfony/http-kernel": "^8.0"
+                "symfony/asset": "^6.4 || ^7.0 || ^8.0",
+                "symfony/http-kernel": "^6.4 || ^7.0 || ^8.0"
             },
             "type": "library",
             "autoload": {

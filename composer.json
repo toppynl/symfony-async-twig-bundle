@@ -15,26 +15,26 @@
   },
   "require": {
     "php": ">=8.4",
-    "toppy/async-view-model": "*@dev",
-    "toppy/twig-view-model": "*@dev",
-    "toppy/twig-streaming": "*@dev",
-    "toppy/twig-prerender": "*@dev",
-    "symfony/framework-bundle": "^8.0",
-    "symfony/twig-bundle": "^8.0",
-    "symfony/http-kernel": "^8.0",
-    "symfony/http-foundation": "^8.0",
-    "symfony/dependency-injection": "^8.0",
-    "symfony/config": "^8.0",
-    "symfony/routing": "^8.0",
-    "symfony/event-dispatcher": "^8.0",
-    "symfony/lock": "^8.0",
-    "symfony/asset": "^8.0",
+    "toppy/async-view-model": "^0.2",
+    "toppy/twig-view-model": "^0.2",
+    "toppy/twig-streaming": "^0.2",
+    "toppy/twig-prerender": "^0.2",
+    "symfony/framework-bundle": "^7.0 || ^8.0",
+    "symfony/twig-bundle": "^7.0 || ^8.0",
+    "symfony/http-kernel": "^7.0 || ^8.0",
+    "symfony/http-foundation": "^7.0 || ^8.0",
+    "symfony/dependency-injection": "^7.0 || ^8.0",
+    "symfony/config": "^7.0 || ^8.0",
+    "symfony/routing": "^7.0 || ^8.0",
+    "symfony/event-dispatcher": "^7.0 || ^8.0",
+    "symfony/lock": "^7.0 || ^8.0",
+    "symfony/asset": "^7.0 || ^8.0",
     "psr/log": "^1.0 || ^2.0 || ^3.0"
   },
   "require-dev": {
     "phpunit/phpunit": "^12.5",
-    "symfony/asset-mapper": "^8.0",
-    "symfony/web-profiler-bundle": "^8.0"
+    "symfony/asset-mapper": "^7.0 || ^8.0",
+    "symfony/web-profiler-bundle": "^7.0 || ^8.0"
   },
   "suggest": {
     "open-telemetry/api": "For OpenTelemetry tracing integration",
@@ -47,9 +47,6 @@
           "all"
         ]
       }
-    },
-    "branch-alias": {
-      "dev-main": "0.x-dev"
     }
   }
 }
