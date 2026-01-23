@@ -15,10 +15,10 @@
   },
   "require": {
     "php": ">=8.4",
-    "toppy/async-view-model": "^0.2",
-    "toppy/twig-view-model": "^0.2",
-    "toppy/twig-streaming": "^0.2",
-    "toppy/twig-prerender": "^0.2",
+    "toppy/async-view-model": "*@dev",
+    "toppy/twig-view-model": "*@dev",
+    "toppy/twig-streaming": "*@dev",
+    "toppy/twig-prerender": "*@dev",
     "symfony/framework-bundle": "^7.0 || ^8.0",
     "symfony/twig-bundle": "^7.0 || ^8.0",
     "symfony/http-kernel": "^7.0 || ^8.0",
@@ -47,6 +47,9 @@
           "all"
         ]
       }
+    },
+    "branch-alias": {
+      "dev-main": "0.x-dev"
     }
   }
 }
