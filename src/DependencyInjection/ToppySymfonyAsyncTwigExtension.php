@@ -5,20 +5,27 @@ declare(strict_types=1);
 namespace Toppy\SymfonyAsyncTwigBundle\DependencyInjection;
 
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Asset\Packages;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Toppy\AsyncViewModel\AsyncViewModel;
 use Toppy\AsyncViewModel\Cache\CachingViewModelDecorator;
+use Toppy\AsyncViewModel\Cache\RevalidationLockInterface;
 use Toppy\AsyncViewModel\Cache\SwrCacheInterface;
 use Toppy\AsyncViewModel\Context\ContextFactoryInterface;
 use Toppy\AsyncViewModel\Context\ContextResolverInterface;
 use Toppy\AsyncViewModel\Profiler\HttpClientProfilerInterface;
+use Toppy\AsyncViewModel\Profiler\NullViewModelProfiler;
 use Toppy\AsyncViewModel\Profiler\TimeEpoch;
 use Toppy\AsyncViewModel\Profiler\ViewModelProfilerInterface;
+use Toppy\AsyncViewModel\ViewModelManager;
 use Toppy\AsyncViewModel\ViewModelManagerInterface;
-use Toppy\AsyncViewModel\Cache\RevalidationLockInterface;
 use Toppy\SymfonyAsyncTwigBundle\Cache\SymfonyRevalidationLock;
 use Toppy\SymfonyAsyncTwigBundle\Cache\SymfonySwrCache;
 use Toppy\SymfonyAsyncTwigBundle\Context\ContextFactory;
@@ -31,10 +38,33 @@ use Toppy\SymfonyAsyncTwigBundle\EventListener\StreamedResponseWebDebugToolbarLi
 use Toppy\SymfonyAsyncTwigBundle\Profiler\HttpClientProfiler;
 use Toppy\SymfonyAsyncTwigBundle\Profiler\TemplateStreamProfiler;
 use Toppy\SymfonyAsyncTwigBundle\Profiler\ViewModelProfiler;
+use Toppy\TwigPrerender\PrerenderExtension;
+use Toppy\TwigPrerender\Service\ContextEncryptor;
+use Toppy\TwigStreaming\EarlyHints\EarlyHintsProviderInterface;
+use Toppy\TwigStreaming\Profiler\NullTemplateStreamProfiler;
 use Toppy\TwigStreaming\Profiler\TemplateStreamProfilerInterface;
+use Toppy\TwigStreaming\Slot\SlotRegistry;
+use Toppy\TwigStreaming\Slot\SlotRegistryInterface;
+use Toppy\TwigStreaming\Slot\SlotRenderer;
+use Toppy\TwigStreaming\Twig\EarlyHintsExtension;
+use Toppy\TwigStreaming\Twig\PreloadingTemplateRenderer;
+use Toppy\TwigStreaming\Twig\StreamingProfilerExtension;
+use Toppy\TwigStreaming\Twig\StreamingProfilerRuntime;
+use Toppy\TwigStreaming\Twig\StreamingTemplateRenderer;
+use Toppy\TwigStreaming\Twig\StreamingTemplateRendererInterface;
+use Toppy\TwigViewModel\Twig\Runtime\ViewModelRuntime;
+use Toppy\TwigViewModel\Twig\ViewExtension;
 
 /**
- * Registers Symfony-specific services for the async Twig stack.
+ * Registers all Toppy async Twig services.
+ *
+ * Consolidates service definitions from:
+ * - async-view-model: ViewModelManager, profiler interfaces
+ * - twig-view-model: ViewExtension, ViewModelRuntime
+ * - twig-streaming: SlotRegistry, StreamingTemplateRenderer, EarlyHints
+ * - twig-prerender: PrerenderExtension, ContextEncryptor
+ *
+ * Plus Symfony-specific services: Context factories, Data collectors, Profilers.
  */
 final class ToppySymfonyAsyncTwigExtension extends Extension
 {
@@ -43,12 +73,70 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
         $configuration = new Configuration();
         $config = $this->processConfiguration($configuration, $configs);
 
-        // TimeEpoch - shared timing reference for profilers
+        // TimeEpoch - shared timing reference for profilers (always needed)
         $container->register(TimeEpoch::class)
             ->setPublic(false)
             ->addTag('kernel.reset', ['method' => 'reset']);
 
-        // Context implementations
+        // === FEATURE: view_model ===
+        if ($config['view_model']['enabled']) {
+            $this->registerViewModelServices($container);
+        }
+
+        // === FEATURE: twig_view ===
+        if ($config['twig_view']['enabled']) {
+            $this->registerTwigViewServices($container);
+        }
+
+        // === FEATURE: streaming ===
+        if ($config['streaming']['enabled']) {
+            $this->registerStreamingServices($container);
+        }
+
+        // === FEATURE: prerender ===
+        if ($config['prerender']['enabled']) {
+            $this->registerPrerenderServices($container);
+        }
+
+        // === FEATURE: profiler ===
+        if ($config['profiler']['enabled']) {
+            $this->registerProfilerServices($container);
+        } else {
+            // Register null profilers when profiler is disabled
+            $this->registerNullProfilers($container);
+        }
+
+        // Cache layer (optional)
+        if ($config['cache']['enabled']) {
+            $this->registerCacheServices($container, $config['cache']);
+        }
+
+        // Invalidation endpoint (optional)
+        if ($config['invalidation']['enabled']) {
+            $this->registerInvalidationServices($container, $config['invalidation']);
+        }
+    }
+
+    /**
+     * Core async view model services (from async-view-model bundle).
+     */
+    private function registerViewModelServices(ContainerBuilder $container): void
+    {
+        // Auto-configure AsyncViewModel implementations with a tag
+        $container->registerForAutoconfiguration(AsyncViewModel::class)
+            ->addTag('toppy.async_view_model');
+
+        // Register ViewModelManager with a service locator for tagged view models
+        $container->register(ViewModelManager::class)
+            ->setArgument('$viewModels', new ServiceLocatorArgument(new TaggedIteratorArgument('toppy.async_view_model', null, null, true)))
+            ->setArgument('$profiler', new Reference(ViewModelProfilerInterface::class))
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->addTag('kernel.reset', ['method' => 'reset']);
+
+        $container->setAlias(ViewModelManagerInterface::class, ViewModelManager::class);
+
+        // Context implementations (Symfony-specific)
         $container->register(ContextFactory::class)
             ->setAutowired(true)
             ->setAutoconfigured(true);
@@ -59,8 +147,90 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
             ->setAutoconfigured(true)
             ->addTag('kernel.reset', ['method' => 'reset']);
         $container->setAlias(ContextResolverInterface::class, ContextResolver::class);
+    }
 
-        // Real profiler implementations (overrides null from child bundles)
+    /**
+     * Twig view() and pre_load_view() functions (from twig-view-model bundle).
+     */
+    private function registerTwigViewServices(ContainerBuilder $container): void
+    {
+        // ViewExtension with twig.extension tag
+        $container->setDefinition(ViewExtension::class, new Definition(ViewExtension::class))
+            ->setAutowired(true)
+            ->setArgument('$loader', new Reference('twig.loader.native_filesystem'))
+            ->addTag('twig.extension');
+
+        // ViewModelRuntime with twig.runtime tag
+        $container->setDefinition(ViewModelRuntime::class, new Definition(ViewModelRuntime::class))
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->addTag('twig.runtime');
+    }
+
+    /**
+     * Streaming template renderer + deferred slots (from twig-streaming bundle).
+     */
+    private function registerStreamingServices(ContainerBuilder $container): void
+    {
+        // Slot services
+        $container->setDefinition(SlotRegistry::class, new Definition(SlotRegistry::class))
+            ->setAutoconfigured(true);
+        $container->setAlias(SlotRegistryInterface::class, SlotRegistry::class);
+
+        $container->setDefinition(SlotRenderer::class, new Definition(SlotRenderer::class));
+
+        // EarlyHintsExtension with twig.extension tag
+        $container->setDefinition(EarlyHintsExtension::class, new Definition(EarlyHintsExtension::class))
+            ->addTag('twig.extension');
+
+        // PreloadingTemplateRenderer
+        $container->setDefinition(PreloadingTemplateRenderer::class, new Definition(PreloadingTemplateRenderer::class))
+            ->setAutowired(true)
+            ->setAutoconfigured(true);
+
+        // StreamingTemplateRenderer with slot dependencies
+        $container->setDefinition(StreamingTemplateRenderer::class, new Definition(StreamingTemplateRenderer::class))
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$viewModelManager', new Reference(ViewModelManagerInterface::class))
+            ->setArgument('$slotRegistry', new Reference(SlotRegistryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$slotRenderer', new Reference(SlotRenderer::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$assetPackages', new Reference(Packages::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$earlyHintsProviders', new TaggedIteratorArgument('toppy.early_hints_provider'))
+            ->setArgument('$requestStack', new Reference(RequestStack::class));
+        $container->setAlias(StreamingTemplateRendererInterface::class, StreamingTemplateRenderer::class);
+
+        // Auto-configure EarlyHintsProvider implementations
+        $container->registerForAutoconfiguration(EarlyHintsProviderInterface::class)
+            ->addTag('toppy.early_hints_provider');
+    }
+
+    /**
+     * Prerender extension for {% include ... prerender(false) %} (from twig-prerender bundle).
+     */
+    private function registerPrerenderServices(ContainerBuilder $container): void
+    {
+        // ContextEncryptor with kernel.secret
+        $container->setDefinition(ContextEncryptor::class, new Definition(ContextEncryptor::class))
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$secretKey', '%kernel.secret%');
+
+        // PrerenderExtension with twig.extension tag and slot dependencies
+        $container->setDefinition(PrerenderExtension::class, new Definition(PrerenderExtension::class))
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$slotRegistry', new Reference(SlotRegistryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$slotRenderer', new Reference(SlotRenderer::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->addTag('twig.extension');
+    }
+
+    /**
+     * Symfony Web Profiler integration (data collectors + real profilers).
+     */
+    private function registerProfilerServices(ContainerBuilder $container): void
+    {
+        // Real profiler implementations
         $container->register(ViewModelProfiler::class)
             ->setAutowired(true)
             ->setAutoconfigured(true)
@@ -106,57 +276,88 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
             ->setAutowired(true)
             ->addTag('kernel.event_subscriber');
 
-        // Early hints providers (conditionally registered based on available bundles)
-        // ImportMapEarlyHintsProvider - registered if symfony/asset-mapper is available
-        // ViteEarlyHintsProvider - registered if pentatrion/vite-bundle is available
+        // StreamingProfilerExtension (debug mode only - for template node instrumentation)
+        $isDebug = $container->hasParameter('kernel.debug')
+            ? $container->getParameter('kernel.debug')
+            : true;
 
-        // Cache layer (optional)
-        if ($config['cache']['enabled']) {
-            $container->register(SymfonySwrCache::class)
+        if ($isDebug) {
+            $container->setDefinition(StreamingProfilerExtension::class, new Definition(StreamingProfilerExtension::class))
+                ->addTag('twig.extension');
+
+            $container->setDefinition(StreamingProfilerRuntime::class, new Definition(StreamingProfilerRuntime::class))
+                ->setAutowired(true)
+                ->addTag('twig.runtime');
+        }
+    }
+
+    /**
+     * Null profilers when profiler feature is disabled.
+     */
+    private function registerNullProfilers(ContainerBuilder $container): void
+    {
+        $container->register(NullViewModelProfiler::class);
+        $container->setAlias(ViewModelProfilerInterface::class, NullViewModelProfiler::class);
+
+        $container->setDefinition(NullTemplateStreamProfiler::class, new Definition(NullTemplateStreamProfiler::class));
+        $container->setAlias(TemplateStreamProfilerInterface::class, NullTemplateStreamProfiler::class);
+    }
+
+    /**
+     * Cache layer services.
+     *
+     * @param array{pool: string, lock: array{enabled: bool, factory: string, ttl: float}} $cacheConfig
+     */
+    private function registerCacheServices(ContainerBuilder $container, array $cacheConfig): void
+    {
+        $container->register(SymfonySwrCache::class)
+            ->setArguments([
+                new Reference($cacheConfig['pool']),
+            ]);
+
+        $container->setAlias(SwrCacheInterface::class, SymfonySwrCache::class);
+
+        // Revalidation lock (optional, prevents thundering herd)
+        $lockReference = null;
+        if ($cacheConfig['lock']['enabled']) {
+            $container->register(SymfonyRevalidationLock::class)
                 ->setArguments([
-                    new Reference($config['cache']['pool']),
+                    new Reference($cacheConfig['lock']['factory']),
+                    $cacheConfig['lock']['ttl'],
                 ]);
-
-            $container->setAlias(SwrCacheInterface::class, SymfonySwrCache::class);
-
-            // Revalidation lock (optional, prevents thundering herd)
-            $lockReference = null;
-            if ($config['cache']['lock']['enabled']) {
-                $container->register(SymfonyRevalidationLock::class)
-                    ->setArguments([
-                        new Reference($config['cache']['lock']['factory']),
-                        $config['cache']['lock']['ttl'],
-                    ]);
-                $container->setAlias(RevalidationLockInterface::class, SymfonyRevalidationLock::class);
-                $lockReference = new Reference(RevalidationLockInterface::class);
-            }
-
-            // Decorate ViewModelManagerInterface with caching
-            // Uses a ServiceLocator containing all tagged AsyncViewModels (keyed by class name)
-            $container->register(CachingViewModelDecorator::class)
-                ->setDecoratedService(ViewModelManagerInterface::class)
-                ->setArguments([
-                    new Reference('.inner'),
-                    new ServiceLocatorArgument(new TaggedIteratorArgument('toppy.async_view_model', null, null, true)),
-                    new Reference(SwrCacheInterface::class),
-                    new Reference(ContextResolverInterface::class),
-                    new Reference(ViewModelProfilerInterface::class),
-                    new Reference(TimeEpoch::class),
-                    new Reference(LoggerInterface::class),
-                    $lockReference,
-                ]);
+            $container->setAlias(RevalidationLockInterface::class, SymfonyRevalidationLock::class);
+            $lockReference = new Reference(RevalidationLockInterface::class);
         }
 
-        // Invalidation endpoint (optional)
-        if ($config['invalidation']['enabled']) {
-            $container->register(InvalidationController::class)
-                ->setArguments([
-                    new Reference(SwrCacheInterface::class),
-                    $config['invalidation']['secret'],
-                    new Reference(LoggerInterface::class),
-                ])
-                ->addTag('controller.service_arguments');
-        }
+        // Decorate ViewModelManagerInterface with caching
+        $container->register(CachingViewModelDecorator::class)
+            ->setDecoratedService(ViewModelManagerInterface::class)
+            ->setArguments([
+                new Reference('.inner'),
+                new ServiceLocatorArgument(new TaggedIteratorArgument('toppy.async_view_model', null, null, true)),
+                new Reference(SwrCacheInterface::class),
+                new Reference(ContextResolverInterface::class),
+                new Reference(ViewModelProfilerInterface::class),
+                new Reference(TimeEpoch::class),
+                new Reference(LoggerInterface::class),
+                $lockReference,
+            ]);
+    }
+
+    /**
+     * Invalidation endpoint services.
+     *
+     * @param array{secret: string, route_prefix: string} $invalidationConfig
+     */
+    private function registerInvalidationServices(ContainerBuilder $container, array $invalidationConfig): void
+    {
+        $container->register(InvalidationController::class)
+            ->setArguments([
+                new Reference(SwrCacheInterface::class),
+                $invalidationConfig['secret'],
+                new Reference(LoggerInterface::class),
+            ])
+            ->addTag('controller.service_arguments');
     }
 
     public function getAlias(): string

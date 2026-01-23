@@ -8,7 +8,7 @@ use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 /**
- * Bundle configuration for cache and invalidation settings.
+ * Bundle configuration for feature toggles, cache, and invalidation settings.
  */
 final class Configuration implements ConfigurationInterface
 {
@@ -18,6 +18,28 @@ final class Configuration implements ConfigurationInterface
 
         $treeBuilder->getRootNode()
             ->children()
+                // Feature toggles (all enabled by default)
+                ->arrayNode('view_model')
+                    ->canBeDisabled()
+                    ->info('Core async view model services (ViewModelManager, profiler)')
+                ->end()
+                ->arrayNode('twig_view')
+                    ->canBeDisabled()
+                    ->info('Twig view() and pre_load_view() functions')
+                ->end()
+                ->arrayNode('streaming')
+                    ->canBeDisabled()
+                    ->info('Streaming template renderer + deferred slots')
+                ->end()
+                ->arrayNode('prerender')
+                    ->canBeDisabled()
+                    ->info('{% include ... prerender(false) %} and defer(true) modifiers')
+                ->end()
+                ->arrayNode('profiler')
+                    ->canBeDisabled()
+                    ->info('Symfony Web Profiler integration (data collectors)')
+                ->end()
+                // Cache configuration (existing)
                 ->arrayNode('cache')
                     ->canBeEnabled()
                     ->children()
@@ -40,6 +62,7 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+                // Invalidation endpoint (existing)
                 ->arrayNode('invalidation')
                     ->canBeEnabled()
                     ->children()
