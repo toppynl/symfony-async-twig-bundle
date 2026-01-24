@@ -6,6 +6,7 @@ namespace Toppy\SymfonyAsyncTwigBundle;
 
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
+use Toppy\SymfonyAsyncTwigBundle\DependencyInjection\Compiler\ConditionalCompilerPass;
 use Toppy\SymfonyAsyncTwigBundle\DependencyInjection\Compiler\DisableWebLinkListenerPass;
 use Toppy\SymfonyAsyncTwigBundle\DependencyInjection\Compiler\OpenTelemetryCompilerPass;
 use Toppy\SymfonyAsyncTwigBundle\DependencyInjection\Compiler\ReplaceTwigDataCollectorPass;
@@ -26,11 +27,23 @@ final class ToppySymfonyAsyncTwigBundle extends Bundle
     {
         parent::build($container);
 
-        $container->addCompilerPass(new TwigYieldModeCompilerPass());
+        // Always run these
         $container->addCompilerPass(new ViewModelDependencyValidationPass());
         $container->addCompilerPass(new OpenTelemetryCompilerPass());
-        $container->addCompilerPass(new DisableWebLinkListenerPass());
-        $container->addCompilerPass(new ReplaceTwigDataCollectorPass());
+
+        // Only run when streaming is enabled
+        $container->addCompilerPass(new ConditionalCompilerPass(
+            new TwigYieldModeCompilerPass(),
+            'toppy.streaming.enabled'
+        ));
+        $container->addCompilerPass(new ConditionalCompilerPass(
+            new DisableWebLinkListenerPass(),
+            'toppy.streaming.enabled'
+        ));
+        $container->addCompilerPass(new ConditionalCompilerPass(
+            new ReplaceTwigDataCollectorPass(),
+            'toppy.streaming.enabled'
+        ));
     }
 
     public function getPath(): string

@@ -17,8 +17,6 @@
     "php": ">=8.4",
     "toppy/async-view-model": "*@dev",
     "toppy/twig-view-model": "*@dev",
-    "toppy/twig-streaming": "*@dev",
-    "toppy/twig-prerender": "*@dev",
     "symfony/framework-bundle": "^7.0 || ^8.0",
     "symfony/twig-bundle": "^7.0 || ^8.0",
     "symfony/http-kernel": "^7.0 || ^8.0",
@@ -37,6 +35,8 @@
     "symfony/web-profiler-bundle": "^7.0 || ^8.0"
   },
   "suggest": {
+    "toppy/twig-streaming": "Required for streaming templates, deferred slots, and early hints",
+    "toppy/twig-prerender": "Required for {% include ... prerender(false) %} and {% include ... defer(true) %} modifiers",
     "open-telemetry/api": "For OpenTelemetry tracing integration",
     "pentatrion/vite-bundle": "For Vite Early Hints provider"
   },

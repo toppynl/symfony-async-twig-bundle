@@ -73,6 +73,38 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
         $configuration = new Configuration();
         $config = $this->processConfiguration($configuration, $configs);
 
+        // Detect package availability
+        $streamingAvailable = $this->isStreamingAvailable();
+        $prerenderAvailable = $this->isPrerenderAvailable();
+
+        // Resolve 'auto' config to actual booleans
+        $streamingEnabled = $this->resolveFeatureEnabled(
+            $config['streaming']['enabled'] ?? 'auto',
+            $streamingAvailable
+        );
+        $prerenderEnabled = $this->resolveFeatureEnabled(
+            $config['prerender']['enabled'] ?? 'auto',
+            $prerenderAvailable
+        );
+
+        // Validate: cannot enable if package not installed
+        if ($streamingEnabled && !$streamingAvailable) {
+            throw new \LogicException(
+                'Cannot enable streaming features: toppy/twig-streaming is not installed. '
+                . 'Run: composer require toppy/twig-streaming'
+            );
+        }
+        if ($prerenderEnabled && !$prerenderAvailable) {
+            throw new \LogicException(
+                'Cannot enable prerender features: toppy/twig-prerender is not installed. '
+                . 'Run: composer require toppy/twig-prerender'
+            );
+        }
+
+        // Store for compiler passes
+        $container->setParameter('toppy.streaming.enabled', $streamingEnabled);
+        $container->setParameter('toppy.prerender.enabled', $prerenderEnabled);
+
         // TimeEpoch - shared timing reference for profilers (always needed)
         $container->register(TimeEpoch::class)
             ->setPublic(false)
@@ -89,21 +121,21 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
         }
 
         // === FEATURE: streaming ===
-        if ($config['streaming']['enabled']) {
+        if ($streamingEnabled) {
             $this->registerStreamingServices($container);
         }
 
         // === FEATURE: prerender ===
-        if ($config['prerender']['enabled']) {
-            $this->registerPrerenderServices($container);
+        if ($prerenderEnabled) {
+            $this->registerPrerenderServices($container, $streamingEnabled);
         }
 
         // === FEATURE: profiler ===
         if ($config['profiler']['enabled']) {
-            $this->registerProfilerServices($container);
+            $this->registerProfilerServices($container, $streamingEnabled);
         } else {
             // Register null profilers when profiler is disabled
-            $this->registerNullProfilers($container);
+            $this->registerNullProfilers($container, $streamingEnabled);
         }
 
         // Cache layer (optional)
@@ -208,48 +240,54 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
     /**
      * Prerender extension for {% include ... prerender(false) %} (from twig-prerender bundle).
      */
-    private function registerPrerenderServices(ContainerBuilder $container): void
+    private function registerPrerenderServices(ContainerBuilder $container, bool $streamingEnabled): void
     {
-        // ContextEncryptor with kernel.secret
+        // ContextEncryptor with kernel.secret - always needed for prerender(false)
         $container->setDefinition(ContextEncryptor::class, new Definition(ContextEncryptor::class))
             ->setAutowired(true)
             ->setAutoconfigured(true)
             ->setArgument('$secretKey', '%kernel.secret%');
 
-        // PrerenderExtension with twig.extension tag and slot dependencies
-        $container->setDefinition(PrerenderExtension::class, new Definition(PrerenderExtension::class))
+        // PrerenderExtension with twig.extension tag and conditional slot dependencies
+        $definition = new Definition(PrerenderExtension::class);
+        $definition
             ->setAutowired(true)
             ->setAutoconfigured(true)
-            ->setArgument('$slotRegistry', new Reference(SlotRegistryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setArgument('$slotRenderer', new Reference(SlotRenderer::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag('twig.extension');
+
+        if ($streamingEnabled) {
+            $definition
+                ->setArgument('$slotRegistry', new Reference(SlotRegistryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+                ->setArgument('$slotRenderer', new Reference(SlotRenderer::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
+        } else {
+            $definition
+                ->setArgument('$slotRegistry', null)
+                ->setArgument('$slotRenderer', null);
+        }
+
+        $container->setDefinition(PrerenderExtension::class, $definition);
     }
 
     /**
      * Symfony Web Profiler integration (data collectors + real profilers).
      */
-    private function registerProfilerServices(ContainerBuilder $container): void
+    private function registerProfilerServices(ContainerBuilder $container, bool $streamingEnabled): void
     {
-        // Real profiler implementations
+        // ViewModelProfiler - always available (from async-view-model)
         $container->register(ViewModelProfiler::class)
             ->setAutowired(true)
             ->setAutoconfigured(true)
             ->addTag('kernel.reset', ['method' => 'reset']);
         $container->setAlias(ViewModelProfilerInterface::class, ViewModelProfiler::class);
 
-        $container->register(TemplateStreamProfiler::class)
-            ->setAutowired(true)
-            ->setAutoconfigured(true)
-            ->addTag('kernel.reset', ['method' => 'reset']);
-        $container->setAlias(TemplateStreamProfilerInterface::class, TemplateStreamProfiler::class);
-
+        // HttpClientProfiler - always available (from async-view-model)
         $container->register(HttpClientProfiler::class)
             ->setAutowired(true)
             ->setAutoconfigured(true)
             ->addTag('kernel.reset', ['method' => 'reset']);
         $container->setAlias(HttpClientProfilerInterface::class, HttpClientProfiler::class);
 
-        // Data collectors for Symfony profiler
+        // ViewModelDataCollector - always available
         $container->register(ViewModelDataCollector::class)
             ->setAutowired(true)
             ->addTag('data_collector', [
@@ -257,13 +295,7 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
                 'id' => 'toppy.view_model',
             ]);
 
-        $container->register(StreamingDataCollector::class)
-            ->setAutowired(true)
-            ->addTag('data_collector', [
-                'template' => '@ToppySymfonyAsyncTwig/data_collector/streaming.html.twig',
-                'id' => 'toppy.streaming',
-            ]);
-
+        // HttpClientDataCollector - always available
         $container->register(HttpClientDataCollector::class)
             ->setAutowired(true)
             ->addTag('data_collector', [
@@ -271,36 +303,55 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
                 'id' => 'toppy.http_client',
             ]);
 
-        // Event listener for streaming debug toolbar
-        $container->register(StreamedResponseWebDebugToolbarListener::class)
-            ->setAutowired(true)
-            ->addTag('kernel.event_subscriber');
-
-        // StreamingProfilerExtension (debug mode only - for template node instrumentation)
-        $isDebug = $container->hasParameter('kernel.debug')
-            ? $container->getParameter('kernel.debug')
-            : true;
-
-        if ($isDebug) {
-            $container->setDefinition(StreamingProfilerExtension::class, new Definition(StreamingProfilerExtension::class))
-                ->addTag('twig.extension');
-
-            $container->setDefinition(StreamingProfilerRuntime::class, new Definition(StreamingProfilerRuntime::class))
+        // === STREAMING-DEPENDENT PROFILERS ===
+        if ($streamingEnabled) {
+            $container->register(TemplateStreamProfiler::class)
                 ->setAutowired(true)
-                ->addTag('twig.runtime');
+                ->setAutoconfigured(true)
+                ->addTag('kernel.reset', ['method' => 'reset']);
+            $container->setAlias(TemplateStreamProfilerInterface::class, TemplateStreamProfiler::class);
+
+            $container->register(StreamingDataCollector::class)
+                ->setAutowired(true)
+                ->addTag('data_collector', [
+                    'template' => '@ToppySymfonyAsyncTwig/data_collector/streaming.html.twig',
+                    'id' => 'toppy.streaming',
+                ]);
+
+            $container->register(StreamedResponseWebDebugToolbarListener::class)
+                ->setAutowired(true)
+                ->addTag('kernel.event_subscriber');
+
+            // StreamingProfilerExtension (debug mode only - for template node instrumentation)
+            $isDebug = $container->hasParameter('kernel.debug')
+                ? $container->getParameter('kernel.debug')
+                : true;
+
+            if ($isDebug) {
+                $container->setDefinition(StreamingProfilerExtension::class, new Definition(StreamingProfilerExtension::class))
+                    ->addTag('twig.extension');
+
+                $container->setDefinition(StreamingProfilerRuntime::class, new Definition(StreamingProfilerRuntime::class))
+                    ->setAutowired(true)
+                    ->addTag('twig.runtime');
+            }
         }
     }
 
     /**
      * Null profilers when profiler feature is disabled.
      */
-    private function registerNullProfilers(ContainerBuilder $container): void
+    private function registerNullProfilers(ContainerBuilder $container, bool $streamingEnabled): void
     {
+        // Null ViewModel profiler - always register
         $container->register(NullViewModelProfiler::class);
         $container->setAlias(ViewModelProfilerInterface::class, NullViewModelProfiler::class);
 
-        $container->setDefinition(NullTemplateStreamProfiler::class, new Definition(NullTemplateStreamProfiler::class));
-        $container->setAlias(TemplateStreamProfilerInterface::class, NullTemplateStreamProfiler::class);
+        // Null Template Stream profiler - only if streaming is available
+        if ($streamingEnabled) {
+            $container->setDefinition(NullTemplateStreamProfiler::class, new Definition(NullTemplateStreamProfiler::class));
+            $container->setAlias(TemplateStreamProfilerInterface::class, NullTemplateStreamProfiler::class);
+        }
     }
 
     /**
@@ -363,5 +414,33 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
     public function getAlias(): string
     {
         return 'toppy_symfony_async_twig';
+    }
+
+    /**
+     * Check if the twig-streaming package is available.
+     */
+    private function isStreamingAvailable(): bool
+    {
+        return interface_exists(SlotRegistryInterface::class);
+    }
+
+    /**
+     * Check if the twig-prerender package is available.
+     */
+    private function isPrerenderAvailable(): bool
+    {
+        return class_exists(PrerenderExtension::class);
+    }
+
+    /**
+     * Resolve 'auto' config value to actual boolean based on package availability.
+     */
+    private function resolveFeatureEnabled(mixed $configValue, bool $packageAvailable): bool
+    {
+        if ($configValue === 'auto') {
+            return $packageAvailable;
+        }
+
+        return (bool) $configValue;
     }
 }
