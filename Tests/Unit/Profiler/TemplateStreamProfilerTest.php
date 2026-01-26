@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Toppy\AsyncViewModel\Profiler\TimeEpoch;
 use Toppy\SymfonyAsyncTwigBundle\Profiler\TemplateStreamProfiler;
 
+/** Tests for TemplateStreamProfiler */
 final class TemplateStreamProfilerTest extends TestCase
 {
     public function testEnterAndLeaveTemplateCreatesEvents(): void
@@ -20,11 +21,11 @@ final class TemplateStreamProfilerTest extends TestCase
 
         $events = $profiler->getEvents();
 
-        $this->assertCount(2, $events);
-        $this->assertSame('template_start', $events[0]->type);
-        $this->assertSame('base.html.twig', $events[0]->name);
-        $this->assertSame('template_end', $events[1]->type);
-        $this->assertSame('base.html.twig', $events[1]->name);
+        static::assertCount(2, $events);
+        static::assertSame('template_start', $events[0]->type);
+        static::assertSame('base.html.twig', $events[0]->name);
+        static::assertSame('template_end', $events[1]->type);
+        static::assertSame('base.html.twig', $events[1]->name);
     }
 
     public function testEnterAndLeaveBlockCreatesEvents(): void
@@ -39,10 +40,10 @@ final class TemplateStreamProfilerTest extends TestCase
 
         $events = $profiler->getEvents();
 
-        $this->assertCount(4, $events);
-        $this->assertSame('block_start', $events[1]->type);
-        $this->assertSame('content', $events[1]->name);
-        $this->assertSame('base.html.twig', $events[1]->parent);
+        static::assertCount(4, $events);
+        static::assertSame('block_start', $events[1]->type);
+        static::assertSame('content', $events[1]->name);
+        static::assertSame('base.html.twig', $events[1]->parent);
     }
 
     public function testResetClearsEvents(): void
@@ -53,11 +54,11 @@ final class TemplateStreamProfilerTest extends TestCase
         $profiler->enterTemplate('test.html.twig');
         $profiler->leaveTemplate('test.html.twig');
 
-        $this->assertNotEmpty($profiler->getEvents());
+        static::assertNotEmpty($profiler->getEvents());
 
         $profiler->reset();
 
-        $this->assertEmpty($profiler->getEvents());
+        static::assertEmpty($profiler->getEvents());
     }
 
     public function testTimestampsAreFromSharedEpoch(): void
@@ -71,6 +72,6 @@ final class TemplateStreamProfilerTest extends TestCase
         $events = $profiler->getEvents();
 
         // Timestamp should be > 5ms since epoch was created before sleep
-        $this->assertGreaterThan(4.0, $events[0]->timestamp);
+        static::assertGreaterThan(4.0, $events[0]->timestamp);
     }
 }

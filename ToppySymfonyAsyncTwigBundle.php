@@ -23,6 +23,7 @@ use Toppy\SymfonyAsyncTwigBundle\DependencyInjection\Compiler\ViewModelDependenc
  */
 final class ToppySymfonyAsyncTwigBundle extends Bundle
 {
+    #[\Override]
     public function build(ContainerBuilder $container): void
     {
         parent::build($container);
@@ -32,20 +33,18 @@ final class ToppySymfonyAsyncTwigBundle extends Bundle
         $container->addCompilerPass(new OpenTelemetryCompilerPass());
 
         // Only run when streaming is enabled
-        $container->addCompilerPass(new ConditionalCompilerPass(
-            new TwigYieldModeCompilerPass(),
-            'toppy.streaming.enabled'
-        ));
-        $container->addCompilerPass(new ConditionalCompilerPass(
-            new DisableWebLinkListenerPass(),
-            'toppy.streaming.enabled'
-        ));
-        $container->addCompilerPass(new ConditionalCompilerPass(
-            new ReplaceTwigDataCollectorPass(),
-            'toppy.streaming.enabled'
-        ));
+        $container->addCompilerPass(
+            new ConditionalCompilerPass(new TwigYieldModeCompilerPass(), 'toppy.streaming.enabled'),
+        );
+        $container->addCompilerPass(
+            new ConditionalCompilerPass(new DisableWebLinkListenerPass(), 'toppy.streaming.enabled'),
+        );
+        $container->addCompilerPass(
+            new ConditionalCompilerPass(new ReplaceTwigDataCollectorPass(), 'toppy.streaming.enabled'),
+        );
     }
 
+    #[\Override]
     public function getPath(): string
     {
         // Return src/ directory where Resources/views lives

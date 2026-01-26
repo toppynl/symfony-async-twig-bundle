@@ -19,26 +19,31 @@ final class ContextResolver implements ContextResolverInterface, ResetInterface
         private readonly ContextFactoryInterface $factory,
     ) {}
 
+    #[\Override]
     public function setViewContext(ViewContext $context): void
     {
         $this->viewContext = $context;
     }
 
+    #[\Override]
     public function setRequestContext(RequestContext $context): void
     {
         $this->requestContext = $context;
     }
 
+    #[\Override]
     public function getViewContext(): ViewContext
     {
         return $this->viewContext ??= $this->factory->createViewContext();
     }
 
+    #[\Override]
     public function getRequestContext(): RequestContext
     {
         return $this->requestContext ??= $this->factory->createRequestContext();
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->viewContext = null;

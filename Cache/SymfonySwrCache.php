@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Toppy\SymfonyAsyncTwigBundle\Cache;
 
+use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
 use Toppy\AsyncViewModel\Cache\CacheEntry;
@@ -11,13 +12,25 @@ use Toppy\AsyncViewModel\Cache\SwrCacheInterface;
 
 /**
  * Symfony Cache implementation of SwrCacheInterface.
+ *
+ * Requires a cache that implements both TagAwareCacheInterface (for tag-based
+ * invalidation) and CacheItemPoolInterface (for direct item access).
+ * Symfony's TagAwareAdapter satisfies both.
+ *
+ * @mago-expect analysis:mixed-assignment
+ *
+ * CacheItem::get() returns mixed. We check instanceof before returning.
  */
 final class SymfonySwrCache implements SwrCacheInterface
 {
     public function __construct(
-        private readonly TagAwareCacheInterface $cache,
+        private readonly TagAwareCacheInterface&CacheItemPoolInterface $cache,
     ) {}
 
+    /**
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    #[\Override]
     public function get(string $key): ?CacheEntry
     {
         $item = $this->cache->getItem($key);
@@ -31,11 +44,12 @@ final class SymfonySwrCache implements SwrCacheInterface
         return $value instanceof CacheEntry ? $value : null;
     }
 
+    #[\Override]
     public function set(string $key, CacheEntry $entry, array $tags): void
     {
         $this->cache->get(
             $key,
-            function (ItemInterface $item) use ($entry, $tags): CacheEntry {
+            static function (ItemInterface $item) use ($entry, $tags): CacheEntry {
                 $item->expiresAfter($entry->getTotalTtl());
                 $item->tag($tags);
                 return $entry;
@@ -44,6 +58,10 @@ final class SymfonySwrCache implements SwrCacheInterface
         );
     }
 
+    /**
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    #[\Override]
     public function invalidateTags(array $tags): void
     {
         $this->cache->invalidateTags($tags);

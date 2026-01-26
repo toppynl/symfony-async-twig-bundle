@@ -16,6 +16,11 @@ use Toppy\AsyncViewModel\Profiler\HttpRequestEntry;
  *
  * Implements LateDataCollectorInterface because HTTP requests made
  * during StreamedResponse callbacks execute AFTER kernel.response.
+ *
+ * @mago-expect analysis:mixed-return-statement
+ *
+ * Symfony AbstractDataCollector $this->data is typed as mixed.
+ * Getter methods return values from $this->data with null coalescing defaults.
  */
 final class HttpClientDataCollector extends AbstractDataCollector implements LateDataCollectorInterface
 {
@@ -23,22 +28,25 @@ final class HttpClientDataCollector extends AbstractDataCollector implements Lat
         private readonly HttpClientProfilerInterface $profiler,
     ) {}
 
+    #[\Override]
     public static function getTemplate(): ?string
     {
         return '@ToppySymfonyAsyncTwig/data_collector/http_client.html.twig';
     }
 
+    #[\Override]
     public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
         // Intentionally empty - data collected in lateCollect() for StreamedResponse support
     }
 
+    #[\Override]
     public function lateCollect(): void
     {
         $entries = $this->profiler->getEntries();
 
         $this->data = [
-            'entries' => array_map(fn(HttpRequestEntry $e) => [
+            'entries' => array_map(static fn(HttpRequestEntry $e) => [
                 'method' => $e->method,
                 'url' => $e->url,
                 'shortUrl' => $e->getShortUrl(),
@@ -60,6 +68,7 @@ final class HttpClientDataCollector extends AbstractDataCollector implements Lat
         ];
     }
 
+    #[\Override]
     public function getName(): string
     {
         return 'toppy.http_client';

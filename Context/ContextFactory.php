@@ -15,6 +15,10 @@ final class ContextFactory implements ContextFactoryInterface
         private readonly RequestStack $requestStack,
     ) {}
 
+    /**
+     * @throws \Symfony\Component\HttpFoundation\Exception\SessionNotFoundException
+     */
+    #[\Override]
     public function createViewContext(bool $isPrivate = false): ViewContext
     {
         $request = $this->requestStack->getCurrentRequest();
@@ -51,6 +55,10 @@ final class ContextFactory implements ContextFactoryInterface
         );
     }
 
+    /**
+     * @throws \Random\RandomException
+     */
+    #[\Override]
     public function createRequestContext(array $additionalParams = []): RequestContext
     {
         $request = $this->requestStack->getCurrentRequest();

@@ -17,6 +17,15 @@ use Toppy\AsyncViewModel\Profiler\ViewModelProfilerInterface;
  *
  * Wraps the inner profiler and adds OTel spans for each ViewModel resolution.
  * Auto-registered when TracerInterface is available in the container.
+ *
+ * @mago-expect analysis:non-existent-class-like
+ * @mago-expect analysis:invalid-method-access
+ * @mago-expect analysis:mixed-method-access
+ * @mago-expect analysis:mixed-assignment
+ * @mago-expect analysis:mixed-property-type-coercion
+ *
+ * OpenTelemetry is an optional dependency without type stubs.
+ * SpanInterface, TracerInterface, SpanKind, and StatusCode are runtime types.
  */
 final class OpenTelemetryProfiler implements ViewModelProfilerInterface
 {
@@ -28,6 +37,7 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         private readonly TracerInterface $tracer,
     ) {}
 
+    #[\Override]
     public function start(
         string $viewModelClass,
         ViewContext $viewContext,
@@ -38,7 +48,8 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
 
         $shortName = $this->getShortName($viewModelClass);
 
-        $span = $this->tracer->spanBuilder("viewmodel.resolve.{$shortName}")
+        $span = $this->tracer
+            ->spanBuilder("viewmodel.resolve.{$shortName}")
             ->setSpanKind(SpanKind::KIND_INTERNAL)
             ->setAttribute('viewmodel.class', $viewModelClass)
             ->setAttribute('viewmodel.short_name', $shortName)
@@ -48,6 +59,7 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         $this->spans[$viewModelClass] = $span;
     }
 
+    #[\Override]
     public function finish(string $viewModelClass, mixed $result): void
     {
         $this->inner->finish($viewModelClass, $result);
@@ -59,6 +71,7 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         }
     }
 
+    #[\Override]
     public function fail(string $viewModelClass, \Throwable $exception): void
     {
         $this->inner->fail($viewModelClass, $exception);
@@ -71,6 +84,7 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         }
     }
 
+    #[\Override]
     public function recordCacheHit(string $viewModelClass, string $cacheStatus, float $startTime, float $endTime): void
     {
         $this->inner->recordCacheHit($viewModelClass, $cacheStatus, $startTime, $endTime);
@@ -78,7 +92,8 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         $shortName = $this->getShortName($viewModelClass);
 
         // Create a span for cache hits with actual duration
-        $span = $this->tracer->spanBuilder("viewmodel.cache.{$shortName}")
+        $span = $this->tracer
+            ->spanBuilder("viewmodel.cache.{$shortName}")
             ->setSpanKind(SpanKind::KIND_INTERNAL)
             ->setAttribute('viewmodel.class', $viewModelClass)
             ->setAttribute('viewmodel.short_name', $shortName)
@@ -90,16 +105,19 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         $span->end();
     }
 
+    #[\Override]
     public function getEntries(): array
     {
         return $this->inner->getEntries();
     }
 
+    #[\Override]
     public function getParallelEfficiency(): float
     {
         return $this->inner->getParallelEfficiency();
     }
 
+    #[\Override]
     public function getTotalTime(): float
     {
         return $this->inner->getTotalTime();
@@ -108,6 +126,7 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
     private function getShortName(string $class): string
     {
         $parts = explode('\\', $class);
-        return end($parts);
+        $shortName = end($parts);
+        return $shortName !== false ? $shortName : $class;
     }
 }

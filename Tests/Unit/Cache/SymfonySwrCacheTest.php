@@ -10,11 +10,15 @@ use Symfony\Component\Cache\Adapter\TagAwareAdapter;
 use Toppy\AsyncViewModel\Cache\CacheEntry;
 use Toppy\SymfonyAsyncTwigBundle\Cache\SymfonySwrCache;
 
+/**
+ * @mago-expect analysis:mixed-property-access
+ */
 final class SymfonySwrCacheTest extends TestCase
 {
     private TagAwareAdapter $symfonyCache;
     private SymfonySwrCache $cache;
 
+    #[\Override]
     protected function setUp(): void
     {
         $this->symfonyCache = new TagAwareAdapter(new ArrayAdapter());
@@ -25,7 +29,7 @@ final class SymfonySwrCacheTest extends TestCase
     {
         $result = $this->cache->get('nonexistent');
 
-        $this->assertNull($result);
+        static::assertNull($result);
     }
 
     public function testSetAndGet(): void
@@ -39,9 +43,9 @@ final class SymfonySwrCacheTest extends TestCase
 
         $retrieved = $this->cache->get('test_key');
 
-        $this->assertInstanceOf(CacheEntry::class, $retrieved);
-        $this->assertSame('test', $retrieved->value->name);
-        $this->assertSame(300, $retrieved->maxAge);
+        static::assertInstanceOf(CacheEntry::class, $retrieved);
+        static::assertSame('test', $retrieved->value->name);
+        static::assertSame(300, $retrieved->maxAge);
     }
 
     public function testInvalidateTags(): void
@@ -53,26 +57,26 @@ final class SymfonySwrCacheTest extends TestCase
         $this->cache->set('key3', $entry, ['product_123', 'stock']);
 
         // Both keys should exist
-        $this->assertNotNull($this->cache->get('key1'));
-        $this->assertNotNull($this->cache->get('key2'));
-        $this->assertNotNull($this->cache->get('key3'));
+        static::assertNotNull($this->cache->get('key1'));
+        static::assertNotNull($this->cache->get('key2'));
+        static::assertNotNull($this->cache->get('key3'));
 
         // Invalidate product_123 tag
         $this->cache->invalidateTags(['product_123']);
 
         // key1 and key3 should be invalidated
-        $this->assertNull($this->cache->get('key1'));
-        $this->assertNotNull($this->cache->get('key2'));
-        $this->assertNull($this->cache->get('key3'));
+        static::assertNull($this->cache->get('key1'));
+        static::assertNotNull($this->cache->get('key2'));
+        static::assertNull($this->cache->get('key3'));
     }
 
     public function testGetReturnsNullForNonCacheEntry(): void
     {
         // Store something that's not a CacheEntry directly via Symfony cache
-        $this->symfonyCache->get('raw_value', fn() => 'not a cache entry');
+        $this->symfonyCache->get('raw_value', static fn() => 'not a cache entry');
 
         $result = $this->cache->get('raw_value');
 
-        $this->assertNull($result);
+        static::assertNull($result);
     }
 }

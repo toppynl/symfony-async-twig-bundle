@@ -24,6 +24,11 @@ final class SymfonyRevalidationLock implements RevalidationLockInterface
         private readonly float $ttl = 30.0,
     ) {}
 
+    /**
+     * @throws \Symfony\Component\Lock\Exception\LockAcquiringException
+     * @throws \Symfony\Component\Lock\Exception\LockConflictedException
+     */
+    #[\Override]
     public function acquire(string $key): bool
     {
         $lockKey = 'cache_revalidation_' . $key;
@@ -37,6 +42,10 @@ final class SymfonyRevalidationLock implements RevalidationLockInterface
         return true;
     }
 
+    /**
+     * @throws \Symfony\Component\Lock\Exception\LockReleasingException
+     */
+    #[\Override]
     public function release(string $key): void
     {
         if (!isset($this->locks[$key])) {

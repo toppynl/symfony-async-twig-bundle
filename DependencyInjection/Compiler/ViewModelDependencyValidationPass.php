@@ -16,11 +16,16 @@ use Toppy\AsyncViewModel\WithDependencies;
  */
 final class ViewModelDependencyValidationPass implements CompilerPassInterface
 {
+    /**
+     * @throws \LogicException On circular dependency
+     * @throws \Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException
+     */
+    #[\Override]
     public function process(ContainerBuilder $container): void
     {
         $viewModels = $container->findTaggedServiceIds('toppy.async_view_model');
 
-        if (empty($viewModels)) {
+        if ($viewModels === []) {
             return;
         }
 
@@ -31,6 +36,8 @@ final class ViewModelDependencyValidationPass implements CompilerPassInterface
     /**
      * @param array<string, array<mixed>> $viewModels
      * @return array<class-string, list<class-string>>
+     *
+     * @throws \Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException
      */
     private function buildDependencyGraph(ContainerBuilder $container, array $viewModels): array
     {
@@ -56,7 +63,9 @@ final class ViewModelDependencyValidationPass implements CompilerPassInterface
                 $method = $reflection->getMethod('getDependencies');
 
                 if ($method->isStatic()) {
-                    $graph[$class] = $class::getDependencies();
+                    /** @var list<class-string> $dependencies */
+                    $dependencies = $class::getDependencies();
+                    $graph[$class] = $dependencies;
                 } else {
                     // Instance method - we can't call it at compile time without instantiation
                     // Skip validation for these; runtime will catch cycles
@@ -81,9 +90,10 @@ final class ViewModelDependencyValidationPass implements CompilerPassInterface
 
         foreach (array_keys($graph) as $node) {
             if ($this->hasCycle($node, $graph, $visited, $recursionStack)) {
-                throw new \LogicException(
-                    sprintf('Circular ViewModel dependency detected: %s', implode(' -> ', $recursionStack))
-                );
+                throw new \LogicException(sprintf('Circular ViewModel dependency detected: %s', implode(
+                    ' -> ',
+                    $recursionStack,
+                )));
             }
         }
     }
@@ -95,7 +105,7 @@ final class ViewModelDependencyValidationPass implements CompilerPassInterface
      */
     private function hasCycle(string $node, array $graph, array &$visited, array &$recursionStack): bool
     {
-        if (in_array($node, $recursionStack, true)) {
+        if (in_array($node, $recursionStack, strict: true)) {
             $recursionStack[] = $node;
             return true;
         }

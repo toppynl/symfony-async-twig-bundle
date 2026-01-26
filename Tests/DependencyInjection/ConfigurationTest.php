@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Processor;
 use Toppy\SymfonyAsyncTwigBundle\DependencyInjection\Configuration;
 
+/**
+ * @mago-expect analysis:mixed-array-access
+ */
 final class ConfigurationTest extends TestCase
 {
     public function testFeatureTogglesHaveDefaults(): void
@@ -15,12 +18,12 @@ final class ConfigurationTest extends TestCase
         $processor = new Processor();
         $config = $processor->processConfiguration(new Configuration(), [[]]);
 
-        // All features enabled by default
-        self::assertTrue($config['view_model']['enabled']);
-        self::assertTrue($config['twig_view']['enabled']);
-        self::assertTrue($config['streaming']['enabled']);
-        self::assertTrue($config['prerender']['enabled']);
-        self::assertTrue($config['profiler']['enabled']);
+        // All features enabled by default (streaming/prerender use 'auto' for package detection)
+        static::assertTrue($config['view_model']['enabled']);
+        static::assertTrue($config['twig_view']['enabled']);
+        static::assertSame('auto', $config['streaming']['enabled']);
+        static::assertSame('auto', $config['prerender']['enabled']);
+        static::assertTrue($config['profiler']['enabled']);
     }
 
     public function testFeatureTogglesCanBeDisabled(): void
@@ -34,10 +37,10 @@ final class ConfigurationTest extends TestCase
             'profiler' => ['enabled' => false],
         ]]);
 
-        self::assertFalse($config['view_model']['enabled']);
-        self::assertFalse($config['twig_view']['enabled']);
-        self::assertFalse($config['streaming']['enabled']);
-        self::assertFalse($config['prerender']['enabled']);
-        self::assertFalse($config['profiler']['enabled']);
+        static::assertFalse($config['view_model']['enabled']);
+        static::assertFalse($config['twig_view']['enabled']);
+        static::assertFalse($config['streaming']['enabled']);
+        static::assertFalse($config['prerender']['enabled']);
+        static::assertFalse($config['profiler']['enabled']);
     }
 }

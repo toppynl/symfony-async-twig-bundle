@@ -6,14 +6,19 @@ namespace Toppy\SymfonyAsyncTwigBundle\Profiler;
 
 use Symfony\Contracts\Service\ResetInterface as SymfonyResetInterface;
 use Toppy\AsyncViewModel\Context\RequestContext;
-use Toppy\AsyncViewModel\ResetInterface;
 use Toppy\AsyncViewModel\Context\ViewContext;
 use Toppy\AsyncViewModel\Profiler\TimeEpoch;
 use Toppy\AsyncViewModel\Profiler\TimelineEntry;
 use Toppy\AsyncViewModel\Profiler\ViewModelProfilerInterface;
+use Toppy\AsyncViewModel\ResetInterface;
 
 /**
  * Default profiler that collects timing data in memory.
+ *
+ * @mago-expect analysis:possibly-invalid-operand
+ *
+ * array_sum() and max() on mapped durations return int|float.
+ * Mago cannot verify operand types for division in getParallelEfficiency().
  */
 final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterface, SymfonyResetInterface
 {
@@ -27,6 +32,7 @@ final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterf
         private readonly TimeEpoch $epoch,
     ) {}
 
+    #[\Override]
     public function start(
         string $viewModelClass,
         ViewContext $viewContext,
@@ -39,6 +45,7 @@ final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterf
         ];
     }
 
+    #[\Override]
     public function finish(string $viewModelClass, mixed $result): void
     {
         if (!isset($this->pending[$viewModelClass])) {
@@ -59,6 +66,7 @@ final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterf
         unset($this->pending[$viewModelClass]);
     }
 
+    #[\Override]
     public function fail(string $viewModelClass, \Throwable $exception): void
     {
         if (!isset($this->pending[$viewModelClass])) {
@@ -79,6 +87,7 @@ final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterf
         unset($this->pending[$viewModelClass]);
     }
 
+    #[\Override]
     public function recordCacheHit(string $viewModelClass, string $cacheStatus, float $startTime, float $endTime): void
     {
         $this->entries[] = new TimelineEntry(
@@ -91,18 +100,20 @@ final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterf
         );
     }
 
+    #[\Override]
     public function getEntries(): array
     {
         return $this->entries;
     }
 
+    #[\Override]
     public function getParallelEfficiency(): float
     {
-        if (empty($this->entries)) {
+        if ($this->entries === []) {
             return 1.0;
         }
 
-        $durations = array_map(fn(TimelineEntry $e) => $e->getDuration(), $this->entries);
+        $durations = array_map(static fn(TimelineEntry $e) => $e->getDuration(), $this->entries);
         $maxDuration = max($durations);
         $sumDurations = array_sum($durations);
 
@@ -113,18 +124,20 @@ final class ViewModelProfiler implements ViewModelProfilerInterface, ResetInterf
         return $maxDuration / $sumDurations;
     }
 
+    #[\Override]
     public function getTotalTime(): float
     {
-        if (empty($this->entries)) {
+        if ($this->entries === []) {
             return 0.0;
         }
 
-        $starts = array_map(fn(TimelineEntry $e) => $e->startTime, $this->entries);
-        $ends = array_map(fn(TimelineEntry $e) => $e->endTime, $this->entries);
+        $starts = array_map(static fn(TimelineEntry $e) => $e->startTime, $this->entries);
+        $ends = array_map(static fn(TimelineEntry $e) => $e->endTime, $this->entries);
 
         return max($ends) - min($starts);
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->pending = [];

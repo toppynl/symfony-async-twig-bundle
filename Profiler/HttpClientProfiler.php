@@ -11,6 +11,11 @@ use Toppy\AsyncViewModel\Profiler\TimeEpoch;
 
 /**
  * Default profiler that collects HTTP request timing data in memory.
+ *
+ * @mago-expect analysis:possibly-invalid-operand
+ *
+ * max() on mapped timestamps returns int|float.
+ * Mago cannot verify operand types for subtraction in getTotalTime().
  */
 final class HttpClientProfiler implements HttpClientProfilerInterface, ResetInterface
 {
@@ -24,12 +29,9 @@ final class HttpClientProfiler implements HttpClientProfilerInterface, ResetInte
         private readonly TimeEpoch $epoch,
     ) {}
 
-    public function start(
-        string $requestId,
-        string $method,
-        string $url,
-        array $headers = [],
-    ): void {
+    #[\Override]
+    public function start(string $requestId, string $method, string $url, array $headers = []): void
+    {
         $this->pending[$requestId] = [
             'start' => $this->epoch->getElapsed(),
             'method' => $method,
@@ -38,12 +40,9 @@ final class HttpClientProfiler implements HttpClientProfilerInterface, ResetInte
         ];
     }
 
-    public function finish(
-        string $requestId,
-        int $statusCode,
-        array $responseHeaders,
-        int $bodySize,
-    ): void {
+    #[\Override]
+    public function finish(string $requestId, int $statusCode, array $responseHeaders, int $bodySize): void
+    {
         if (!isset($this->pending[$requestId])) {
             return;
         }
@@ -67,6 +66,7 @@ final class HttpClientProfiler implements HttpClientProfilerInterface, ResetInte
         unset($this->pending[$requestId]);
     }
 
+    #[\Override]
     public function fail(string $requestId, \Throwable $exception): void
     {
         if (!isset($this->pending[$requestId])) {
@@ -92,33 +92,38 @@ final class HttpClientProfiler implements HttpClientProfilerInterface, ResetInte
         unset($this->pending[$requestId]);
     }
 
+    #[\Override]
     public function getEntries(): array
     {
         return $this->entries;
     }
 
+    #[\Override]
     public function getTotalTime(): float
     {
-        if (empty($this->entries)) {
+        if ($this->entries === []) {
             return 0.0;
         }
 
-        $starts = array_map(fn(HttpRequestEntry $e) => $e->startTime, $this->entries);
-        $ends = array_map(fn(HttpRequestEntry $e) => $e->endTime, $this->entries);
+        $starts = array_map(static fn(HttpRequestEntry $e) => $e->startTime, $this->entries);
+        $ends = array_map(static fn(HttpRequestEntry $e) => $e->endTime, $this->entries);
 
         return max($ends) - min($starts);
     }
 
+    #[\Override]
     public function getCount(): int
     {
         return count($this->entries);
     }
 
+    #[\Override]
     public function getErrorCount(): int
     {
-        return count(array_filter($this->entries, fn(HttpRequestEntry $e) => $e->status === 'error'));
+        return count(array_filter($this->entries, static fn(HttpRequestEntry $e) => $e->status === 'error'));
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->pending = [];

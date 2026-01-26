@@ -20,8 +20,12 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
  */
 final class DisableWebLinkListenerPass implements CompilerPassInterface
 {
-    private const LISTENER_ID = 'web_link.add_link_header_listener';
+    private const string LISTENER_ID = 'web_link.add_link_header_listener';
 
+    /**
+     * @throws \Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException
+     */
+    #[\Override]
     public function process(ContainerBuilder $container): void
     {
         if (!$container->hasDefinition(self::LISTENER_ID)) {

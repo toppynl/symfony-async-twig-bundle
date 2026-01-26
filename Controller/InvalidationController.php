@@ -15,21 +15,30 @@ use Toppy\AsyncViewModel\Cache\SwrCacheInterface;
 
 /**
  * HTTP endpoint for cache invalidation.
+ *
+ * @mago-expect analysis:less-specific-nested-return-statement
+ * @mago-expect analysis:mixed-return-statement
+ *
+ * Request::toArray() returns mixed. The extractTags() method validates
+ * and returns string array, but Mago cannot infer array element types.
  */
 #[Route('/_cache', name: 'toppy_cache_')]
 final class InvalidationController
 {
     public function __construct(
         private readonly SwrCacheInterface $cache,
+        #[\SensitiveParameter]
         private readonly string $secret,
         private readonly LoggerInterface $logger = new NullLogger(),
     ) {}
 
+    /**
+     * @throws \Symfony\Component\HttpFoundation\Exception\BadRequestException
+     */
     #[Route('/invalidate', name: 'invalidate', methods: ['GET', 'POST'])]
     public function invalidate(Request $request): Response
     {
-        $providedSecret = $request->query->get('secret')
-            ?? $request->headers->get('X-Cache-Secret');
+        $providedSecret = $request->query->get('secret') ?? $request->headers->get('X-Cache-Secret');
 
         if (!hash_equals($this->secret, $providedSecret ?? '')) {
             return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_FORBIDDEN);
@@ -37,7 +46,7 @@ final class InvalidationController
 
         $tags = $this->extractTags($request);
 
-        if (empty($tags)) {
+        if ($tags === []) {
             return new JsonResponse(['error' => 'No tags provided'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -53,6 +62,8 @@ final class InvalidationController
 
     /**
      * @return array<string>
+     *
+     * @throws \Symfony\Component\HttpFoundation\Exception\BadRequestException
      */
     private function extractTags(Request $request): array
     {

@@ -18,9 +18,14 @@ use Toppy\SymfonyAsyncTwigBundle\DataCollector\LateTwigDataCollector;
  */
 final class ReplaceTwigDataCollectorPass implements CompilerPassInterface
 {
-    private const TWIG_COLLECTOR_ID = 'data_collector.twig';
-    private const TWIG_PROFILE_ID = 'twig.profile';
+    private const string TWIG_COLLECTOR_ID = 'data_collector.twig';
+    private const string TWIG_PROFILE_ID = 'twig.profile';
 
+    /**
+     * @throws \Symfony\Component\DependencyInjection\Exception\InvalidArgumentException
+     * @throws \Symfony\Component\DependencyInjection\Exception\BadMethodCallException
+     */
+    #[\Override]
     public function process(ContainerBuilder $container): void
     {
         // Only apply in debug mode

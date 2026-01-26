@@ -17,6 +17,11 @@ use Toppy\AsyncViewModel\Profiler\ViewModelProfilerInterface;
  * Implements LateDataCollectorInterface because StreamedResponse callbacks
  * execute AFTER kernel.response (when collect() runs). The actual profiler
  * data is only available at kernel.terminate when lateCollect() runs.
+ *
+ * @mago-expect analysis:mixed-return-statement
+ *
+ * Symfony AbstractDataCollector $this->data is typed as mixed.
+ * Getter methods return values from $this->data with null coalescing defaults.
  */
 final class ViewModelDataCollector extends AbstractDataCollector implements LateDataCollectorInterface
 {
@@ -24,22 +29,25 @@ final class ViewModelDataCollector extends AbstractDataCollector implements Late
         private readonly ViewModelProfilerInterface $profiler,
     ) {}
 
+    #[\Override]
     public static function getTemplate(): ?string
     {
         return '@ToppySymfonyAsyncTwig/data_collector/view_model.html.twig';
     }
 
+    #[\Override]
     public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
         // Intentionally empty - data collected in lateCollect() for StreamedResponse support
     }
 
+    #[\Override]
     public function lateCollect(): void
     {
         $entries = $this->profiler->getEntries();
 
         $this->data = [
-            'entries' => array_map(fn(TimelineEntry $e) => [
+            'entries' => array_map(static fn(TimelineEntry $e) => [
                 'class' => $e->viewModelClass,
                 'shortName' => $e->getShortName(),
                 'start' => $e->startTime,
@@ -55,6 +63,7 @@ final class ViewModelDataCollector extends AbstractDataCollector implements Late
         ];
     }
 
+    #[\Override]
     public function getName(): string
     {
         return 'toppy.view_model';

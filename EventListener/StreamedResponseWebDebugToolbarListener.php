@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Toppy\SymfonyAsyncTwigBundle\EventListener;
 
 use Symfony\Bundle\FrameworkBundle\FullStack;
+use Symfony\Bundle\WebProfilerBundle\Csp\ContentSecurityPolicyHandler;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Bundle\WebProfilerBundle\Csp\ContentSecurityPolicyHandler;
 use Twig\Environment;
 
 /**
@@ -24,6 +24,12 @@ use Twig\Environment;
  * This mirrors the approach from symfony/symfony#58789.
  *
  * @see https://github.com/symfony/symfony/pull/58789
+ *
+ * @mago-expect analysis:non-existent-class-like
+ * @mago-expect analysis:invalid-method-access
+ *
+ * ContentSecurityPolicyHandler is from symfony/web-profiler-bundle (optional).
+ * When bundle is not installed, $cspHandler is null (nullable injection).
  */
 final class StreamedResponseWebDebugToolbarListener implements EventSubscriberInterface
 {
@@ -33,6 +39,7 @@ final class StreamedResponseWebDebugToolbarListener implements EventSubscriberIn
         private readonly ?ContentSecurityPolicyHandler $cspHandler = null,
     ) {}
 
+    #[\Override]
     public static function getSubscribedEvents(): array
     {
         return [
@@ -63,7 +70,7 @@ final class StreamedResponseWebDebugToolbarListener implements EventSubscriberIn
 
         // Skip non-HTML responses
         $contentType = $response->headers->get('Content-Type', '');
-        if (!str_contains($contentType, 'html')) {
+        if ($contentType === null || !str_contains($contentType, 'html')) {
             return;
         }
 
@@ -73,19 +80,22 @@ final class StreamedResponseWebDebugToolbarListener implements EventSubscriberIn
         }
 
         // Skip attachments
-        if ($response->headers->has('Content-Disposition')
-            && str_contains($response->headers->get('Content-Disposition', ''), 'attachment')) {
+        $contentDisposition = $response->headers->get('Content-Disposition', '');
+        if ($contentDisposition !== null && str_contains($contentDisposition, 'attachment')) {
             return;
         }
 
         // Skip excluded AJAX paths (e.g., /_wdt itself)
-        if ($this->excludedAjaxPaths !== null
+        if (
+            $this->excludedAjaxPaths !== null
             && $request->isXmlHttpRequest()
-            && preg_match('#' . $this->excludedAjaxPaths . '#', $request->getPathInfo())) {
+            && preg_match('#' . $this->excludedAjaxPaths . '#', $request->getPathInfo())
+        ) {
             return;
         }
 
         // Get CSP nonces if handler is available
+        /** @var array{csp_script_nonce?: ?string, csp_style_nonce?: ?string} $nonces */
         $nonces = $this->cspHandler?->updateResponseHeaders($request, $response) ?? [];
 
         $this->injectToolbar($response, $request, $nonces);
@@ -109,7 +119,14 @@ final class StreamedResponseWebDebugToolbarListener implements EventSubscriberIn
         // Wrap the callback to append toolbar JS after streaming completes.
         // We append AFTER the stream (not buffering) to preserve streaming benefits.
         // The toolbar JS loads via iframe, so appending after </body> is safe.
-        $injectedCallback = static function () use ($originalCallback, $token, $request, $nonces, $excludedAjaxPaths, $twig): void {
+        $injectedCallback = static function () use (
+            $originalCallback,
+            $token,
+            $request,
+            $nonces,
+            $excludedAjaxPaths,
+            $twig,
+        ): void {
             // Execute the original streaming callback
             $originalCallback();
 
@@ -124,14 +141,15 @@ final class StreamedResponseWebDebugToolbarListener implements EventSubscriberIn
                     'csp_style_nonce' => $nonces['csp_style_nonce'] ?? null,
                 ]);
 
-                echo "\n" . str_replace("\n", '', $toolbarHtml);
+                echo "\n" . str_replace(search: "\n", replace: '', subject: $toolbarHtml);
 
                 if (ob_get_level() > 0) {
                     ob_flush();
                 }
                 flush();
+
+                // @mago-ignore lint:no-empty-catch-clause - Toolbar failure must not break streamed response
             } catch (\Throwable) {
-                // Silently ignore toolbar rendering failures
             }
         };
 

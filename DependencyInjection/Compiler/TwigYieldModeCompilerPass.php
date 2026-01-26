@@ -16,9 +16,18 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
  *
  * Note: TwigBundle doesn't expose use_yield in config, so we merge it
  * with existing options on the service definition.
+ *
+ * @mago-expect analysis:mixed-assignment
+ *
+ * Definition::getArgument() returns mixed. We check is_array() before use.
  */
 final class TwigYieldModeCompilerPass implements CompilerPassInterface
 {
+    /**
+     * @throws \Symfony\Component\DependencyInjection\Exception\OutOfBoundsException
+     * @throws \Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException
+     */
+    #[\Override]
     public function process(ContainerBuilder $container): void
     {
         if (!$container->hasDefinition('twig')) {

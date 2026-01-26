@@ -17,6 +17,10 @@ final class ConditionalCompilerPass implements CompilerPassInterface
         private readonly string $parameterName,
     ) {}
 
+    /**
+     * @throws \Symfony\Component\DependencyInjection\Exception\ParameterNotFoundException
+     */
+    #[\Override]
     public function process(ContainerBuilder $container): void
     {
         if (!$container->hasParameter($this->parameterName)) {

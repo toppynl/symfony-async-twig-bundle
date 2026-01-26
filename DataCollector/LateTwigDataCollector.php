@@ -21,6 +21,22 @@ use Twig\Profiler\Profile;
  * IMPORTANT: Data must be stored in $this->data because collectors are serialized
  * to storage. When viewing past requests, the collector is unserialized without
  * calling the constructor, so $inner won't exist. Getters must read from $this->data.
+ *
+ * @phpstan-type DataArray array{
+ *     time?: float,
+ *     template_count?: int,
+ *     template_paths?: array<string, string>,
+ *     templates?: array<string, int>,
+ *     block_count?: int,
+ *     macro_count?: int,
+ *     html_call_graph?: string,
+ *     profile?: Profile
+ * }
+ *
+ * @mago-expect analysis:mixed-assignment
+ *
+ * Symfony DataCollector $this->data is typed as mixed. Getters use instanceof/is_*
+ * checks before returning, but assignment from $this->data['key'] triggers warning.
  */
 final class LateTwigDataCollector extends DataCollector implements LateDataCollectorInterface
 {
@@ -34,6 +50,7 @@ final class LateTwigDataCollector extends DataCollector implements LateDataColle
         private readonly Profile $profile,
     ) {}
 
+    #[\Override]
     public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
         $this->request = $request;
@@ -47,6 +64,7 @@ final class LateTwigDataCollector extends DataCollector implements LateDataColle
         }
     }
 
+    #[\Override]
     public function lateCollect(): void
     {
         if ($this->isStreamed && $this->request !== null && $this->response !== null) {
@@ -86,11 +104,13 @@ final class LateTwigDataCollector extends DataCollector implements LateDataColle
         ];
     }
 
+    #[\Override]
     public function getName(): string
     {
         return 'twig';
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->inner->reset();
@@ -105,41 +125,63 @@ final class LateTwigDataCollector extends DataCollector implements LateDataColle
 
     public function getProfile(): Profile
     {
-        return $this->data['profile'] ?? $this->profile;
+        $profile = $this->data['profile'] ?? null;
+        return $profile instanceof Profile ? $profile : $this->profile;
     }
 
     public function getTime(): float
     {
-        return $this->data['time'] ?? 0.0;
+        $time = $this->data['time'] ?? null;
+        if (is_float($time)) {
+            return $time;
+        }
+        if (is_int($time)) {
+            return (float) $time;
+        }
+        return 0.0;
     }
 
     public function getTemplateCount(): int
     {
-        return $this->data['template_count'] ?? 0;
+        $count = $this->data['template_count'] ?? null;
+        return is_int($count) ? $count : 0;
     }
 
+    /**
+     * @return array<string, string>
+     */
     public function getTemplatePaths(): array
     {
-        return $this->data['template_paths'] ?? [];
+        $paths = $this->data['template_paths'] ?? null;
+        /** @var array<string, string> */
+        return is_array($paths) ? $paths : [];
     }
 
+    /**
+     * @return array<string, int>
+     */
     public function getTemplates(): array
     {
-        return $this->data['templates'] ?? [];
+        $templates = $this->data['templates'] ?? null;
+        /** @var array<string, int> */
+        return is_array($templates) ? $templates : [];
     }
 
     public function getBlockCount(): int
     {
-        return $this->data['block_count'] ?? 0;
+        $count = $this->data['block_count'] ?? null;
+        return is_int($count) ? $count : 0;
     }
 
     public function getMacroCount(): int
     {
-        return $this->data['macro_count'] ?? 0;
+        $count = $this->data['macro_count'] ?? null;
+        return is_int($count) ? $count : 0;
     }
 
     public function getHtmlCallGraph(): string
     {
-        return $this->data['html_call_graph'] ?? '';
+        $graph = $this->data['html_call_graph'] ?? null;
+        return is_string($graph) ? $graph : '';
     }
 }

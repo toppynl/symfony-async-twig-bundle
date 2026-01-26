@@ -9,9 +9,11 @@ use Symfony\Component\HttpFoundation\Request;
 use Toppy\AsyncViewModel\Cache\SwrCacheInterface;
 use Toppy\SymfonyAsyncTwigBundle\Controller\InvalidationController;
 
+/** Tests for InvalidationController */
+// @mago-ignore lint:no-literal-password - Test fixtures require literal test secrets
 final class InvalidationControllerTest extends TestCase
 {
-    private const SECRET = 'test-secret-123';
+    private const string SECRET = 'test-secret-123';
 
     public function testUnauthorizedWithoutSecret(): void
     {
@@ -23,8 +25,10 @@ final class InvalidationControllerTest extends TestCase
         $request = Request::create('/_cache/invalidate', 'GET');
         $response = $controller->invalidate($request);
 
-        $this->assertSame(403, $response->getStatusCode());
-        $this->assertStringContainsString('Unauthorized', $response->getContent());
+        static::assertSame(403, $response->getStatusCode());
+        $content = $response->getContent();
+        static::assertIsString($content);
+        static::assertStringContainsString('Unauthorized', $content);
     }
 
     public function testUnauthorizedWithWrongSecret(): void
@@ -37,7 +41,7 @@ final class InvalidationControllerTest extends TestCase
         $request = Request::create('/_cache/invalidate?secret=wrong', 'GET');
         $response = $controller->invalidate($request);
 
-        $this->assertSame(403, $response->getStatusCode());
+        static::assertSame(403, $response->getStatusCode());
     }
 
     public function testBadRequestWithoutTags(): void
@@ -50,40 +54,44 @@ final class InvalidationControllerTest extends TestCase
         $request = Request::create('/_cache/invalidate?secret=' . self::SECRET, 'GET');
         $response = $controller->invalidate($request);
 
-        $this->assertSame(400, $response->getStatusCode());
-        $this->assertStringContainsString('No tags provided', $response->getContent());
+        static::assertSame(400, $response->getStatusCode());
+        $content = $response->getContent();
+        static::assertIsString($content);
+        static::assertStringContainsString('No tags provided', $content);
     }
 
     public function testGetWithQueryParams(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);
-        $cache->expects($this->once())
-            ->method('invalidateTags')
-            ->with(['product_123', 'stock']);
+        $cache->expects($this->once())->method('invalidateTags')->with(['product_123', 'stock']);
 
         $controller = new InvalidationController($cache, self::SECRET);
 
         $request = Request::create(
             '/_cache/invalidate?secret=' . self::SECRET . '&tags[]=product_123&tags[]=stock',
-            'GET'
+            'GET',
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        static::assertSame(200, $response->getStatusCode());
 
-        $data = json_decode($response->getContent(), true);
-        $this->assertSame('ok', $data['status']);
-        $this->assertSame(['product_123', 'stock'], $data['invalidated']);
+        $content = $response->getContent();
+        static::assertIsString($content);
+        /** @var array{status: string, invalidated: list<string>} $data */
+        $data = json_decode($content, associative: true);
+        static::assertSame('ok', $data['status']);
+        static::assertSame(['product_123', 'stock'], $data['invalidated']);
     }
 
     public function testPostWithJsonBody(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);
-        $cache->expects($this->once())
-            ->method('invalidateTags')
-            ->with(['product_456']);
+        $cache->expects($this->once())->method('invalidateTags')->with(['product_456']);
 
         $controller = new InvalidationController($cache, self::SECRET);
+
+        $jsonBody = json_encode(['tags' => ['product_456']]);
+        static::assertIsString($jsonBody);
 
         $request = Request::create(
             '/_cache/invalidate?secret=' . self::SECRET,
@@ -92,19 +100,17 @@ final class InvalidationControllerTest extends TestCase
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['tags' => ['product_456']])
+            $jsonBody,
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        static::assertSame(200, $response->getStatusCode());
     }
 
     public function testSecretViaHeader(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);
-        $cache->expects($this->once())
-            ->method('invalidateTags')
-            ->with(['tag1']);
+        $cache->expects($this->once())->method('invalidateTags')->with(['tag1']);
 
         $controller = new InvalidationController($cache, self::SECRET);
 
@@ -114,37 +120,30 @@ final class InvalidationControllerTest extends TestCase
             [],
             [],
             [],
-            ['HTTP_X_CACHE_SECRET' => self::SECRET]
+            ['HTTP_X_CACHE_SECRET' => self::SECRET],
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        static::assertSame(200, $response->getStatusCode());
     }
 
     public function testPostWithQueryParamTags(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);
-        $cache->expects($this->once())
-            ->method('invalidateTags')
-            ->with(['tag_a', 'tag_b']);
+        $cache->expects($this->once())->method('invalidateTags')->with(['tag_a', 'tag_b']);
 
         $controller = new InvalidationController($cache, self::SECRET);
 
-        $request = Request::create(
-            '/_cache/invalidate?secret=' . self::SECRET . '&tags[]=tag_a&tags[]=tag_b',
-            'POST'
-        );
+        $request = Request::create('/_cache/invalidate?secret=' . self::SECRET . '&tags[]=tag_a&tags[]=tag_b', 'POST');
         $response = $controller->invalidate($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        static::assertSame(200, $response->getStatusCode());
     }
 
     public function testQueryParamSecretTakesPrecedenceOverHeader(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);
-        $cache->expects($this->once())
-            ->method('invalidateTags')
-            ->with(['tag1']);
+        $cache->expects($this->once())->method('invalidateTags')->with(['tag1']);
 
         $controller = new InvalidationController($cache, self::SECRET);
 
@@ -155,11 +154,11 @@ final class InvalidationControllerTest extends TestCase
             [],
             [],
             [],
-            ['HTTP_X_CACHE_SECRET' => 'wrong-secret']
+            ['HTTP_X_CACHE_SECRET' => 'wrong-secret'],
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        static::assertSame(200, $response->getStatusCode());
     }
 
     public function testEmptyTagsArrayReturnsBadRequest(): void
@@ -169,6 +168,9 @@ final class InvalidationControllerTest extends TestCase
 
         $controller = new InvalidationController($cache, self::SECRET);
 
+        $jsonBody = json_encode(['tags' => []]);
+        static::assertIsString($jsonBody);
+
         $request = Request::create(
             '/_cache/invalidate?secret=' . self::SECRET,
             'POST',
@@ -176,11 +178,11 @@ final class InvalidationControllerTest extends TestCase
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['tags' => []])
+            $jsonBody,
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(400, $response->getStatusCode());
+        static::assertSame(400, $response->getStatusCode());
     }
 
     public function testInvalidJsonReturnsBadRequest(): void
@@ -197,11 +199,11 @@ final class InvalidationControllerTest extends TestCase
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            'not valid json{'
+            'not valid json{',
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(400, $response->getStatusCode());
+        static::assertSame(400, $response->getStatusCode());
     }
 
     public function testJsonBodyMissingTagsKeyReturnsBadRequest(): void
@@ -211,6 +213,9 @@ final class InvalidationControllerTest extends TestCase
 
         $controller = new InvalidationController($cache, self::SECRET);
 
+        $jsonBody = json_encode(['other_key' => 'value']);
+        static::assertIsString($jsonBody);
+
         $request = Request::create(
             '/_cache/invalidate?secret=' . self::SECRET,
             'POST',
@@ -218,32 +223,30 @@ final class InvalidationControllerTest extends TestCase
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['other_key' => 'value'])
+            $jsonBody,
         );
         $response = $controller->invalidate($request);
 
-        $this->assertSame(400, $response->getStatusCode());
+        static::assertSame(400, $response->getStatusCode());
     }
 
     public function testSingleTagInQueryParam(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);
-        $cache->expects($this->once())
-            ->method('invalidateTags')
-            ->with(['single_tag']);
+        $cache->expects($this->once())->method('invalidateTags')->with(['single_tag']);
 
         $controller = new InvalidationController($cache, self::SECRET);
 
-        $request = Request::create(
-            '/_cache/invalidate?secret=' . self::SECRET . '&tags[]=single_tag',
-            'GET'
-        );
+        $request = Request::create('/_cache/invalidate?secret=' . self::SECRET . '&tags[]=single_tag', 'GET');
         $response = $controller->invalidate($request);
 
-        $this->assertSame(200, $response->getStatusCode());
+        static::assertSame(200, $response->getStatusCode());
 
-        $data = json_decode($response->getContent(), true);
-        $this->assertSame(['single_tag'], $data['invalidated']);
+        $content = $response->getContent();
+        static::assertIsString($content);
+        /** @var array{invalidated: list<string>} $data */
+        $data = json_decode($content, associative: true);
+        static::assertSame(['single_tag'], $data['invalidated']);
     }
 
     public function testResponseContainsCorrectStructure(): void
@@ -253,18 +256,18 @@ final class InvalidationControllerTest extends TestCase
 
         $controller = new InvalidationController($cache, self::SECRET);
 
-        $request = Request::create(
-            '/_cache/invalidate?secret=' . self::SECRET . '&tags[]=test',
-            'GET'
-        );
+        $request = Request::create('/_cache/invalidate?secret=' . self::SECRET . '&tags[]=test', 'GET');
         $response = $controller->invalidate($request);
 
-        $data = json_decode($response->getContent(), true);
+        $content = $response->getContent();
+        static::assertIsString($content);
+        /** @var array{status: string, invalidated: list<string>} $data */
+        $data = json_decode($content, associative: true);
 
-        $this->assertArrayHasKey('status', $data);
-        $this->assertArrayHasKey('invalidated', $data);
-        $this->assertSame('ok', $data['status']);
-        $this->assertIsArray($data['invalidated']);
+        static::assertArrayHasKey('status', $data);
+        static::assertArrayHasKey('invalidated', $data);
+        static::assertSame('ok', $data['status']);
+        static::assertIsArray($data['invalidated']);
     }
 
     public function testTimingAttackProtection(): void
@@ -277,12 +280,9 @@ final class InvalidationControllerTest extends TestCase
         $controller = new InvalidationController($cache, self::SECRET);
 
         // Similar secret (one character different)
-        $request = Request::create(
-            '/_cache/invalidate?secret=test-secret-124&tags[]=tag',
-            'GET'
-        );
+        $request = Request::create('/_cache/invalidate?secret=test-secret-124&tags[]=tag', 'GET');
         $response = $controller->invalidate($request);
 
-        $this->assertSame(403, $response->getStatusCode());
+        static::assertSame(403, $response->getStatusCode());
     }
 }

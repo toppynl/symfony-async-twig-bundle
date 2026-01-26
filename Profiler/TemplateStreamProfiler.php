@@ -24,6 +24,7 @@ final class TemplateStreamProfiler implements TemplateStreamProfilerInterface, R
         private readonly TimeEpoch $epoch,
     ) {}
 
+    #[\Override]
     public function enterTemplate(string $templateName): void
     {
         $this->templateStack[] = $templateName;
@@ -35,6 +36,7 @@ final class TemplateStreamProfiler implements TemplateStreamProfilerInterface, R
         );
     }
 
+    #[\Override]
     public function leaveTemplate(string $templateName): void
     {
         array_pop($this->templateStack);
@@ -45,6 +47,7 @@ final class TemplateStreamProfiler implements TemplateStreamProfilerInterface, R
         );
     }
 
+    #[\Override]
     public function enterBlock(string $templateName, string $blockName): void
     {
         $this->events[] = new StreamingTimelineEvent(
@@ -55,6 +58,7 @@ final class TemplateStreamProfiler implements TemplateStreamProfilerInterface, R
         );
     }
 
+    #[\Override]
     public function leaveBlock(string $templateName, string $blockName): void
     {
         $this->events[] = new StreamingTimelineEvent(
@@ -65,11 +69,13 @@ final class TemplateStreamProfiler implements TemplateStreamProfilerInterface, R
         );
     }
 
+    #[\Override]
     public function getEvents(): array
     {
         return $this->events;
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->events = [];

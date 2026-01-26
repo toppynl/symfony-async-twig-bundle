@@ -21,6 +21,13 @@ use Toppy\TwigStreaming\Profiler\TemplateStreamProfilerInterface;
  * Implements LateDataCollectorInterface because StreamedResponse callbacks
  * execute AFTER kernel.response (when collect() runs). The actual profiler
  * data is only available at kernel.terminate when lateCollect() runs.
+ *
+ * @mago-expect analysis:mixed-return-statement
+ * @mago-expect analysis:possibly-invalid-argument
+ * @mago-expect analysis:possibly-invalid-operand
+ *
+ * Symfony AbstractDataCollector $this->data is typed as mixed.
+ * Timeline array structure varies by event type (duration, statusCode optional).
  */
 final class StreamingDataCollector extends AbstractDataCollector implements LateDataCollectorInterface
 {
@@ -30,26 +37,27 @@ final class StreamingDataCollector extends AbstractDataCollector implements Late
         private readonly ?HttpClientProfilerInterface $httpProfiler = null,
     ) {}
 
+    #[\Override]
     public static function getTemplate(): ?string
     {
         return '@ToppySymfonyAsyncTwig/data_collector/streaming.html.twig';
     }
 
+    #[\Override]
     public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
         // Intentionally empty - data collected in lateCollect() for StreamedResponse support
     }
 
+    #[\Override]
     public function lateCollect(): void
     {
         $templateEvents = $this->convertTemplateEvents($this->templateProfiler->getEvents());
         $viewModelEvents = $this->convertViewModelEntries($this->viewModelProfiler->getEntries());
-        $httpEvents = $this->httpProfiler !== null
-            ? $this->convertHttpEntries($this->httpProfiler->getEntries())
-            : [];
+        $httpEvents = $this->httpProfiler !== null ? $this->convertHttpEntries($this->httpProfiler->getEntries()) : [];
 
         $timeline = array_merge($templateEvents, $viewModelEvents, $httpEvents);
-        usort($timeline, fn($a, $b) => $a['timestamp'] <=> $b['timestamp']);
+        usort($timeline, static fn($a, $b) => $a['timestamp'] <=> $b['timestamp']);
 
         $this->data = [
             'timeline' => $timeline,
@@ -58,6 +66,7 @@ final class StreamingDataCollector extends AbstractDataCollector implements Late
         ];
     }
 
+    #[\Override]
     public function getName(): string
     {
         return 'toppy.streaming';
@@ -84,14 +93,16 @@ final class StreamingDataCollector extends AbstractDataCollector implements Late
      */
     public function getStats(): array
     {
-        return $this->data['stats'] ?? [
-            'template_count' => 0,
-            'block_count' => 0,
-            'viewmodel_count' => 0,
-            'http_request_count' => 0,
-            'total_time' => 0.0,
-            'parallel_efficiency' => 1.0,
-        ];
+        return (
+            $this->data['stats'] ?? [
+                'template_count' => 0,
+                'block_count' => 0,
+                'viewmodel_count' => 0,
+                'http_request_count' => 0,
+                'total_time' => 0.0,
+                'parallel_efficiency' => 1.0,
+            ]
+        );
     }
 
     /**
@@ -100,7 +111,7 @@ final class StreamingDataCollector extends AbstractDataCollector implements Late
      */
     private function convertTemplateEvents(array $events): array
     {
-        return array_map(fn(StreamingTimelineEvent $e) => [
+        return array_map(static fn(StreamingTimelineEvent $e) => [
             'type' => $e->type,
             'name' => $e->name,
             'shortName' => $e->getShortName(),
@@ -181,23 +192,29 @@ final class StreamingDataCollector extends AbstractDataCollector implements Late
     {
         $markers = [];
 
-        $templateStarts = array_filter($timeline, fn($e) => $e['type'] === 'template_start');
-        $templateEnds = array_filter($timeline, fn($e) => $e['type'] === 'template_end');
-        $viewModelEnds = array_filter($timeline, fn($e) => $e['type'] === 'viewmodel_end');
+        $templateStarts = array_filter($timeline, static fn($e) => $e['type'] === 'template_start');
+        $templateEnds = array_filter($timeline, static fn($e) => $e['type'] === 'template_end');
+        $viewModelEnds = array_filter($timeline, static fn($e) => $e['type'] === 'viewmodel_end');
 
-        if (!empty($templateStarts)) {
-            $first = min(array_column($templateStarts, 'timestamp'));
-            $markers['first_template'] = ['timestamp' => $first, 'label' => 'First Template'];
+        if ($templateStarts !== []) {
+            /** @var list<float> $timestamps */
+            $timestamps = array_column($templateStarts, 'timestamp');
+            $first = min($timestamps);
+            $markers['first_template'] = ['timestamp' => (float) $first, 'label' => 'First Template'];
         }
 
-        if (!empty($viewModelEnds)) {
-            $last = max(array_column($viewModelEnds, 'timestamp'));
-            $markers['all_data_ready'] = ['timestamp' => $last, 'label' => 'All Data Ready'];
+        if ($viewModelEnds !== []) {
+            /** @var list<float> $timestamps */
+            $timestamps = array_column($viewModelEnds, 'timestamp');
+            $last = max($timestamps);
+            $markers['all_data_ready'] = ['timestamp' => (float) $last, 'label' => 'All Data Ready'];
         }
 
-        if (!empty($templateEnds)) {
-            $last = max(array_column($templateEnds, 'timestamp'));
-            $markers['response_complete'] = ['timestamp' => $last, 'label' => 'Response Complete'];
+        if ($templateEnds !== []) {
+            /** @var list<float> $timestamps */
+            $timestamps = array_column($templateEnds, 'timestamp');
+            $last = max($timestamps);
+            $markers['response_complete'] = ['timestamp' => (float) $last, 'label' => 'Response Complete'];
         }
 
         return $markers;
@@ -209,13 +226,13 @@ final class StreamingDataCollector extends AbstractDataCollector implements Late
      */
     private function calculateStats(array $timeline): array
     {
-        $templateCount = count(array_filter($timeline, fn($e) => $e['type'] === 'template_start'));
-        $blockCount = count(array_filter($timeline, fn($e) => $e['type'] === 'block_start'));
-        $viewModelCount = count(array_filter($timeline, fn($e) => $e['type'] === 'viewmodel_start'));
-        $httpRequestCount = count(array_filter($timeline, fn($e) => $e['type'] === 'http_start'));
+        $templateCount = count(array_filter($timeline, static fn($e) => $e['type'] === 'template_start'));
+        $blockCount = count(array_filter($timeline, static fn($e) => $e['type'] === 'block_start'));
+        $viewModelCount = count(array_filter($timeline, static fn($e) => $e['type'] === 'viewmodel_start'));
+        $httpRequestCount = count(array_filter($timeline, static fn($e) => $e['type'] === 'http_start'));
 
         $timestamps = array_column($timeline, 'timestamp');
-        $totalTime = !empty($timestamps) ? max($timestamps) - min($timestamps) : 0.0;
+        $totalTime = $timestamps !== [] ? max($timestamps) - min($timestamps) : 0.0;
 
         return [
             'template_count' => $templateCount,

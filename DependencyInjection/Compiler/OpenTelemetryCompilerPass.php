@@ -17,6 +17,11 @@ use Toppy\SymfonyAsyncTwigBundle\Profiler\OpenTelemetryProfiler;
  */
 final class OpenTelemetryCompilerPass implements CompilerPassInterface
 {
+    /**
+     * @throws \Symfony\Component\DependencyInjection\Exception\InvalidArgumentException
+     * @throws \Symfony\Component\DependencyInjection\Exception\BadMethodCallException
+     */
+    #[\Override]
     public function process(ContainerBuilder $container): void
     {
         // Check if OTel TracerInterface exists and is registered

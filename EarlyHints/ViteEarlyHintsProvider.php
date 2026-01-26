@@ -15,6 +15,14 @@ use Toppy\TwigStreaming\EarlyHints\EarlyHintsProviderInterface;
  * Unlike ImportMapEarlyHintsProvider, this provider CAN include modulepreload
  * hints because Vite's build output uses direct URLs rather than bare specifiers.
  * There's no importmap to parse before modules can be resolved.
+ *
+ * @mago-expect analysis:ambiguous-object-method-access
+ * @mago-expect analysis:unknown-iterator-type
+ * @mago-expect analysis:mixed-assignment
+ * @mago-expect analysis:less-specific-nested-return-statement
+ *
+ * EntrypointsLookup is typed as object (Pentatrion ViteBundle optional dependency).
+ * Methods getJSFiles(), getCSSFiles(), getJavascriptDependencies() return iterables.
  */
 final class ViteEarlyHintsProvider implements EarlyHintsProviderInterface
 {
@@ -27,6 +35,7 @@ final class ViteEarlyHintsProvider implements EarlyHintsProviderInterface
         private readonly array $entrypoints = ['app'],
     ) {}
 
+    #[\Override]
     public function getHints(): array
     {
         $hints = [];

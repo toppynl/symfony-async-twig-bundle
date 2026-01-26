@@ -33,6 +33,7 @@ final class ImportMapEarlyHintsProvider implements EarlyHintsProviderInterface
         private readonly array $entrypoints = ['app'],
     ) {}
 
+    #[\Override]
     public function getHints(): array
     {
         $hints = [];
@@ -44,7 +45,7 @@ final class ImportMapEarlyHintsProvider implements EarlyHintsProviderInterface
             }
 
             $path = $data['path'];
-            $type = $data['type'] ?? 'js';
+            $type = $data['type'];
 
             // Only include CSS preloads in Early Hints
             // JS modulepreload is handled by HTML after importmap is parsed
