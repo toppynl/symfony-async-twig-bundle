@@ -32,6 +32,18 @@ final class ContextResolver implements ContextResolverInterface, ResetInterface
     }
 
     #[\Override]
+    public function hasViewContext(): bool
+    {
+        return $this->viewContext !== null;
+    }
+
+    #[\Override]
+    public function hasRequestContext(): bool
+    {
+        return $this->requestContext !== null;
+    }
+
+    #[\Override]
     public function getViewContext(): ViewContext
     {
         return $this->viewContext ??= $this->factory->createViewContext();
