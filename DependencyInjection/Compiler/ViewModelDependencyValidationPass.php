@@ -64,6 +64,7 @@ final class ViewModelDependencyValidationPass implements CompilerPassInterface
 
                 if ($method->isStatic()) {
                     /** @var list<class-string> $dependencies */
+                    // @mago-ignore analysis:invalid-static-method-access - guarded by $method->isStatic() check above
                     $dependencies = $class::getDependencies();
                     $graph[$class] = $dependencies;
                 } else {
