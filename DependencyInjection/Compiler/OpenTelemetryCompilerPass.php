@@ -38,6 +38,7 @@ final class OpenTelemetryCompilerPass implements CompilerPassInterface
         $definition->setDecoratedService(ViewModelProfilerInterface::class);
         $definition->setArgument('$inner', new Reference(OpenTelemetryProfiler::class . '.inner'));
         $definition->setArgument('$tracer', new Reference(TracerInterface::class));
+        $definition->addTag('kernel.reset', ['method' => 'reset']);
 
         $container->setDefinition(OpenTelemetryProfiler::class, $definition);
     }

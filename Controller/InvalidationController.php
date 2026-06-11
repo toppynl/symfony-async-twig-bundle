@@ -30,7 +30,14 @@ final class InvalidationController
         #[\SensitiveParameter]
         private readonly string $secret,
         private readonly LoggerInterface $logger = new NullLogger(),
-    ) {}
+    ) {
+        // Config-level cannotBeEmpty() is bypassed by %env()% placeholders that
+        // resolve to '' at runtime; hash_equals('', '') is true, which would
+        // allow unauthenticated cache purges.
+        if ($this->secret === '') {
+            throw new \InvalidArgumentException('Cache invalidation secret must not be empty.');
+        }
+    }
 
     /**
      * @throws \Symfony\Component\HttpFoundation\Exception\BadRequestException

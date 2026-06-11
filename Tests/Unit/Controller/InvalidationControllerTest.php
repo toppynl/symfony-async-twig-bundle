@@ -15,6 +15,18 @@ final class InvalidationControllerTest extends TestCase
 {
     private const string SECRET = 'test-secret-123';
 
+    public function testConstructorRejectsEmptySecret(): void
+    {
+        // Config validation (cannotBeEmpty) is bypassed by %env()% placeholders
+        // that resolve to '' at runtime; hash_equals('', '') is true, so an
+        // empty secret would let anyone purge the cache unauthenticated.
+        $cache = $this->createStub(SwrCacheInterface::class);
+
+        static::expectException(\InvalidArgumentException::class);
+
+        new InvalidationController($cache, '');
+    }
+
     public function testUnauthorizedWithoutSecret(): void
     {
         $cache = $this->createMock(SwrCacheInterface::class);

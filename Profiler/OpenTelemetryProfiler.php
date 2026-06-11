@@ -27,7 +27,7 @@ use Toppy\AsyncViewModel\Profiler\ViewModelProfilerInterface;
  * OpenTelemetry is an optional dependency without type stubs.
  * SpanInterface, TracerInterface, SpanKind, and StatusCode are runtime types.
  */
-final class OpenTelemetryProfiler implements ViewModelProfilerInterface
+final class OpenTelemetryProfiler implements ViewModelProfilerInterface, \Symfony\Contracts\Service\ResetInterface
 {
     /** @var array<string, SpanInterface> */
     private array $spans = [];
@@ -36,6 +36,22 @@ final class OpenTelemetryProfiler implements ViewModelProfilerInterface
         private readonly ViewModelProfilerInterface $inner,
         private readonly TracerInterface $tracer,
     ) {}
+
+    /**
+     * Spans are request-scoped but keyed by view model class. In worker mode a
+     * span whose fiber never finishes would leak across requests, and a late
+     * finish() from a previous request would end the wrong request's span.
+     * Reset (wired via kernel.reset) ends and drops everything still open.
+     */
+    #[\Override]
+    public function reset(): void
+    {
+        foreach ($this->spans as $span) {
+            $span->end();
+        }
+
+        $this->spans = [];
+    }
 
     #[\Override]
     public function start(
