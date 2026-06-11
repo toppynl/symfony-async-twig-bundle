@@ -452,7 +452,8 @@ final class ToppySymfonyAsyncTwigExtension extends Extension
                 new Reference(TimeEpoch::class),
                 new Reference(LoggerInterface::class),
                 $lockReference,
-            ]);
+            ])
+            ->addTag('kernel.reset', ['method' => 'reset']);
     }
 
     /**
